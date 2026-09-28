@@ -1,5 +1,5 @@
 {
- "generatedAt": "2026-09-13T13:20:58.339Z",
+ "generatedAt": "2026-09-28T16:48:50.382Z",
  "source": "Public domain (OurAirports, regenerated nightly)",
  "airports": [
   {
@@ -32250,7 +32250,7 @@
    "country": "GE",
    "lat": 42.8582,
    "lon": 41.128101,
-   "size": "medium"
+   "size": "large"
   },
   {
    "iata": "SUJ",

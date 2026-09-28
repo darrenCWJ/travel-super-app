@@ -1,13 +1,13 @@
 # Airports catalog report
 
-- Generated: 2026-09-13T13:20:58.339Z
+- Generated: 2026-09-28T16:48:50.382Z
 - Source: https://davidmegginson.github.io/ourairports-data/airports.csv
 - Licence: Public domain (OurAirports, regenerated nightly)
 - Filter: scheduled_service = yes AND iata_code present
 
 **4133 airports across 234 countries.**
 
-By size: 1149 large, 2095 medium, 889 small.
+By size: 1150 large, 2094 medium, 889 small.
 
 ## Most airports by country
 
