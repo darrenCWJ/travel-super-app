@@ -1,5 +1,5 @@
 {
- "generatedAt": "2026-09-28T17:03:07.815Z",
+ "generatedAt": "2026-09-29T15:07:29.706Z",
  "source": "GeoNames cities500 (CC BY 4.0)",
  "countries": [
   {
@@ -55,7 +55,7 @@
   {
    "code": "AT",
    "count": 750,
-   "generatedAt": "2026-09-03T09:27:18.747Z"
+   "generatedAt": "2026-09-29T15:07:29.706Z"
   },
   {
    "code": "AU",
@@ -485,12 +485,12 @@
   {
    "code": "HU",
    "count": 750,
-   "generatedAt": "2026-09-22T23:21:10.637Z"
+   "generatedAt": "2026-09-29T15:07:29.706Z"
   },
   {
    "code": "ID",
    "count": 750,
-   "generatedAt": "2026-09-03T09:27:18.747Z"
+   "generatedAt": "2026-09-29T15:07:29.706Z"
   },
   {
    "code": "IE",
@@ -500,7 +500,7 @@
   {
    "code": "IL",
    "count": 724,
-   "generatedAt": "2026-09-22T23:21:10.637Z"
+   "generatedAt": "2026-09-29T15:07:29.706Z"
   },
   {
    "code": "IM",
@@ -900,7 +900,7 @@
   {
    "code": "PS",
    "count": 448,
-   "generatedAt": "2026-08-29T15:36:54.681Z"
+   "generatedAt": "2026-09-29T15:07:29.706Z"
   },
   {
    "code": "PT",
@@ -1110,7 +1110,7 @@
   {
    "code": "TR",
    "count": 750,
-   "generatedAt": "2026-09-26T13:23:51.410Z"
+   "generatedAt": "2026-09-29T15:07:29.706Z"
   },
   {
    "code": "TT",
@@ -1135,7 +1135,7 @@
   {
    "code": "UA",
    "count": 750,
-   "generatedAt": "2026-09-22T23:21:10.637Z"
+   "generatedAt": "2026-09-29T15:07:29.706Z"
   },
   {
    "code": "UG",
