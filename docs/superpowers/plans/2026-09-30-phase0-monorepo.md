@@ -64,6 +64,8 @@ The spec leaves these open. Each one takes the default below; the owner can over
 | D10 | Vercel gets no `installCommand` override. The default `pnpm install` runs, and pnpm 10 switches itself to the pinned version. `ENABLE_EXPERIMENTAL_COREPACK=1` is added only if the build log shows another pnpm. | Vercel's docs say an overridden install command can run the image's oldest pnpm. |
 | D11 | The nightly refresh workflows are disabled only for the Root Directory cutover window (Task 6). | A data commit on the old paths while Root Directory is `apps/web` would fail its deploy and complicate the rebase. |
 | D12 | The Expo skeleton starts from `blank-typescript` and adds expo-router, not from the `default` template. | The default template brings reanimated, `react-native-web` and demo screens. A smaller native surface means fewer pnpm-isolation surprises. |
+| D13 | Three pieces of §0's end-state tree wait for their phases: `apps/mobile/eas.json` (phase 6), the Claude file layout (a tracked root `CLAUDE.md` repo map, `apps/mobile/CLAUDE.md`, `.claude` in `.vercelignore`; phase 1), and `src/` in `apps/web` (D4). Phase 0 tracks only the `apps/web/AGENTS.md` and `CLAUDE.md` that `next dev` writes. | EAS is unused until phase 6. §12 item 1 owns "the Claude file layout". |
+| D14 | The generated files are exported as `@tsa/features/_registry/*` and `@tsa/platform/_registry/server`, the same name as their folder. | A key such as `./registry/server` would shadow the `./*/server` pattern for the spec's own `platform/registry` module. |
 
 ## PR map
 
@@ -100,7 +102,9 @@ C:\dev\travel-super-app\
    └─ boundaries/            src/{imports,zones,rules,scan}.ts + tests, repo.test.ts                     (PR 3)
 ```
 
-**Where the code in this plan comes from.** The whole of `tools/boundaries/src/*` and `tools/registry-gen/*` was written and run before this plan was written. It lived in a spike at `.claude/worktrees/spike-phase0` of the old checkout. It ran 140 tests green under Vitest 4.1.11 and passed `tsc` 7.0.2 with `checkJs`, and every rule in `rules.ts` was mutation-checked: deleting or inverting any one of them turns a test red. The files below are those exact files. The spike also scanned today's app as a stand-in for `apps/web` and found one real violation, a computed `import()` in `lib/tokens.test.ts:194`. That result is why test files may use computed specifiers. The spike also showed that oxc's module record misses TypeScript's `import x = require("y")`, which the AST walk now catches.
+**Where the code in this plan comes from.** The whole of `tools/boundaries/src/*` and `tools/registry-gen/*` was written and run before this plan was written. It lived in a spike at `.claude/worktrees/spike-phase0` of the old checkout. It ran 140 tests green under Vitest 4.1.11 and passed `tsc` 7.0.2 with `checkJs`, and every rule in `rules.ts` was mutation-checked: deleting or inverting any one of them turns a test red. The plan adds a 2-test scan of the repo itself, so the tool suites total 142: 132 in boundaries and 10 in registry-gen. Fable's review of this plan found two latent defects in that code, and both are fixed here:
+- the generated feature registry would have been flagged "features never import each other" as soon as a feature existed;
+- the reserved name `registry` would have collided with the spec's `platform/registry` module. The files below are those exact files. The spike also scanned today's app as a stand-in for `apps/web` and found one real violation, a computed `import()` in `lib/tokens.test.ts:194`. That result is why test files may use computed specifiers. The spike also showed that oxc's module record misses TypeScript's `import x = require("y")`, which the AST walk now catches.
 
 ---
 
@@ -122,12 +126,14 @@ git fetch --prune
 git status --short
 git stash list
 git branch -vv
+git worktree list
 foreach ($sha in "7f0d05d","c7ca63c","f1d78ba") { git cherry origin/main $sha }
 ```
 Expected:
 - `git status` and `git stash list` print nothing.
 - No branch says `ahead`.
-- The three worktree heads under `.claude/worktrees/` print only lines starting with `-`, meaning every commit is already on main under a rebased SHA (checked on 2026-09-30).
+- `git worktree list` shows the three leftover worktrees: `busy-mclaren-8a5671` at 7f0d05d, `hopeful-ramanujan-8e8af0` at c7ca63c and `nervous-moser-e26c6b` at f1d78ba.
+- Their heads print only lines starting with `-` (14, 4 and 2 of them), meaning every commit is already on main under a rebased SHA (checked on 2026-09-30).
 
 If anything else shows up, stop and ask the owner.
 
@@ -255,7 +261,7 @@ Expected: pnpm switches itself to 10.34.6 because of `packageManager` (`managePa
 ```powershell
 pnpm exec tsc --noEmit
 ```
-Expected: FAIL. `TS2307: Cannot find module 'topojson-specification'` appears in about 10 files, and `Cannot find namespace 'GeoJSON'` in about 5. npm hoisted both type packages from `@types/topojson-client` and `@types/d3-geo`; pnpm's strict layout does not. If tsc passes anyway, report it: the inventory predicted these errors, and a pass means the prediction was wrong.
+Expected: FAIL, with `TS2307: Cannot find module 'topojson-specification'` in about 10 files. npm hoisted that type package from `@types/topojson-client`; pnpm's strict layout does not. The global `GeoJSON` namespace may still resolve, because `@types/d3-geo` pulls `@types/geojson` into the program itself. Declaring it anyway, in Step 7, stops the app depending on another package's internals. If tsc passes outright, report it: the inventory predicted the `topojson-specification` errors.
 
 - [ ] **Step 7: declare them**
 
@@ -389,7 +395,9 @@ Then:
 ```powershell
 Select-String -Path .github\workflows\*.yml -Pattern "npm ci|npm test|npx |cache: npm" | Select-Object -ExpandProperty Line
 ```
-Expected: no output. If a comment still names an npm command, reword it for pnpm, because stale comments are this project's known failure mode.
+Expected: only comment lines match, and no step does. On 2026-09-30 those were:
+- `ci.yml:5`, which is history ("nothing anywhere ran `npm test`"): leave it;
+- about six header comments in `refresh-cities.yml` and `refresh-climate.yml` that name `npm test` or `npm ci`: reword each for pnpm, because stale comments are this project's known failure mode.
 
 - [ ] **Step 6: commit, push, open PR 1**
 
@@ -405,10 +413,11 @@ End the PR body with `🤖 Generated with [Claude Code](https://claude.com/claud
 
 CI: the `test` and `e2e` jobs are green.
 
-Vercel: find this branch's preview and read its build log:
+Vercel: find this branch's preview and read its build log. Paste the URL that `vercel ls` prints into `$preview`:
 ```powershell
 vercel ls china-itinerary-planner -m githubCommitRef=chore/pnpm
-vercel inspect <preview-url> --logs
+$preview = "https://paste-the-preview-url-here.vercel.app"
+vercel inspect $preview --logs
 ```
 Expected in the log:
 - pnpm at 10.34.6, either shown directly or after it switches from the image's pnpm 10;
@@ -416,7 +425,7 @@ Expected in the log:
 - `Compiled successfully`;
 - the deployment is Ready.
 
-If the log shows pnpm 9, or a pnpm 10 older than 10.26 that never switches: ask the owner to add the environment variable `ENABLE_EXPERIMENTAL_COREPACK` = `1` for Preview and Production in the Vercel project, then redeploy (`vercel redeploy <preview-url>`) and read the log again.
+If the log shows pnpm 9, or a pnpm 10 older than 10.26 that never switches: ask the owner to add the environment variable `ENABLE_EXPERIMENTAL_COREPACK` = `1` for Preview and Production in the Vercel project, then run `vercel redeploy $preview` and read the new deployment's log.
 
 - [ ] **Step 8 (owner): merge PR 1**, rebase-merge. Then watch the next scheduled `Refresh cities` run, because its `commit` job now installs with pnpm:
 
@@ -564,13 +573,14 @@ pnpm-debug.log*
   - "Data, and how it refreshes" (L113-132): every `node scripts/...` example gains "from `apps/web`", for example ``cd apps/web; node scripts/ingest-destinations.mjs``.
   - L171-173: delete the stale sentence about an install command that pulls the `main` tarball. The dashboard override is long gone.
 
-- [ ] **Step 8: move the untracked local files that `git mv` left behind**
+- [ ] **Step 8: move the untracked local files that `git mv` left behind.** `git mv` renames whole folders on disk, so the untracked files inside moved folders have already gone with them: `data/app.db*` is now in `apps/web/data/` and `e2e/.auth/` in `apps/web/e2e/`. What remains at the root is `.env.local` plus build output.
 
 ```powershell
 if (Test-Path .env.local) { Move-Item .env.local apps\web\.env.local }
-if (Test-Path data) { Get-ChildItem data -Force | Move-Item -Destination apps\web\data; Remove-Item data }
-Remove-Item -Recurse -Force node_modules, .next, test-results, playwright-report, e2e, tsconfig.tsbuildinfo, AGENTS.md, CLAUDE.md -ErrorAction SilentlyContinue
+Remove-Item -Recurse -Force node_modules, .next, test-results, playwright-report, tsconfig.tsbuildinfo, AGENTS.md, CLAUDE.md -ErrorAction SilentlyContinue
+Get-ChildItem -Force -Name
 ```
+Expected: the listing shows only `.claude`, `.git`, `.github`, `.gitignore`, `.vercel`, `apps`, `docs`, `package.json` (Step 4), `pnpm-lock.yaml`, `pnpm-workspace.yaml` and `README.md`. `.superpowers` may also appear if it was carried over.
 The root `AGENTS.md` and `CLAUDE.md` were local copies pointing at a root `node_modules/next` that no longer exists. `next dev` writes fresh ones into `apps/web` in Step 10.
 
 - [ ] **Step 9: reinstall and check nothing resolved differently**
@@ -617,12 +627,12 @@ git status --short | Where-Object { $_ -notmatch "^R " }
 git commit -m "chore: move the web app into apps/web" -m "A pure move with git mv; the app's own layout is unchanged. The root becomes a pnpm workspace whose scripts delegate to @tsa/web, so tests still run with apps/web as their working directory. .gitattributes moves with the artifacts it pins to LF; .gitignore is re-anchored; Next's AGENTS.md and CLAUDE.md are now tracked in apps/web." -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
 Expected: the `Where-Object` line lists only these:
-- `A  package.json` (the new root);
+- `M  package.json`: the root path still exists, with new content;
+- `A  apps/web/package.json`: git cannot pair it as a rename while `package.json` still exists;
 - `M` lines for `.gitignore`, `pnpm-workspace.yaml`, `pnpm-lock.yaml`, `.claude/launch.json` and `README.md`;
-- `A` lines for `apps/web/AGENTS.md` and `apps/web/CLAUDE.md`;
-- possibly `RM` for `apps/web/package.json` and `apps/web/lib/server/catalog.ts` (renamed and edited).
+- `A` lines for `apps/web/AGENTS.md` and `apps/web/CLAUDE.md`.
 
-Nothing else, and no `.env.local` and no `app.db`.
+Nothing else, and no `.env.local` and no `app.db`. The renamed-and-edited `apps/web/lib/server/catalog.ts` shows as `R`, which the filter hides.
 
 ---
 
@@ -781,7 +791,7 @@ Select-String -Path .github\workflows\*.yml -Pattern "git add (public|data)|git 
 ```
 Expected:
 - the first command lists five `run: node scripts/` lines (airports, cities, enrich, facts and climate), each with `working-directory: apps/web` as the line above;
-- the second command prints nothing. Each hit there is a step still pointing at the old layout.
+- the second command prints only `refresh-climate.yml`'s header comment ("Commit condition: `git status --porcelain -- public/climate`"). Reword it to `apps/web/public/climate`; any other hit is a step still pointing at the old layout.
 
 - [ ] **Step 7: commit and push, then open PR 2**
 
@@ -818,9 +828,13 @@ gh workflow disable "Refresh airports"
 
 ```powershell
 vercel ls china-itinerary-planner -m githubCommitRef=chore/apps-web
-vercel redeploy <that-preview-url>
-vercel inspect <new-preview-url> --logs
+$preview = "https://paste-the-branch-preview-url-here.vercel.app"
+vercel redeploy $preview
+vercel ls china-itinerary-planner -m githubCommitRef=chore/apps-web
+$newPreview = "https://paste-the-NEW-preview-url-here.vercel.app"
+vercel inspect $newPreview --logs
 ```
+If the redeployed preview fails with the same error as before the Root Directory change, the redeploy reused the old settings. Push an empty commit instead (`git commit --allow-empty -m "chore: rebuild the preview with Root Directory apps/web"`, then `git push`) for a fresh build.
 Expected in the log:
 - the install runs at the repo root with pnpm 10.34.6;
 - `Compiled successfully`;
@@ -828,7 +842,7 @@ Expected in the log:
 
 Then the owner opens the preview URL while signed in to Vercel, since preview URLs are SSO-protected. `/login` must render with the vendored fonts. Then:
 ```powershell
-vercel logs <new-preview-url>
+vercel logs $newPreview
 ```
 Expected: no `Cannot find module` errors. Database errors from the dead Supabase project (`tenant/user not found`) are expected, the same as production today.
 
@@ -837,7 +851,8 @@ Expected: no `Cannot find module` errors. Database errors from the dead Supabase
 - [ ] **Step 5 (owner): merge PR 2**, rebase-merge.
 
 ```powershell
-gh pr view <PR-2-number> --json state
+$pr = 0   # set to PR 2's number
+gh pr view $pr --json state
 vercel ls china-itinerary-planner --prod
 ```
 Expected: `"state":"MERGED"`, and the newest production deployment, built from `apps/web`, is Ready.
@@ -848,9 +863,14 @@ Expected: `"state":"MERGED"`, and the newest production deployment, built from `
 gh workflow enable "Refresh cities"
 gh workflow enable "Refresh airports"
 gh workflow run "Refresh airports" --ref main
-gh run list --workflow "Refresh airports" --limit 1
 ```
-Expected: the run goes green. It either prints `No change in the airport set` or commits a change touching only `apps/web/data/airports.json` and `airports-report.md`; check with `git log -1 --stat origin/main`.
+Wait about 20 seconds, because the new run takes a moment to register, then:
+```powershell
+gh run list --workflow "Refresh airports" --limit 1
+gh run watch
+git fetch; git log -1 --stat origin/main
+```
+Expected: the run goes green. It either prints `No change in the airport set` or commits a change touching only `apps/web/data/airports.json` and `airports-report.md`.
 
 Then let the next scheduled `Refresh cities` run, or have the owner dispatch it. It must be green, and any commit it makes must touch only `apps/web/public/cities/**` and `apps/web/data/*`.
 
@@ -880,7 +900,7 @@ git branch -d chore/apps-web; git push origin --delete chore/apps-web
   - `features/_registry/manifests.ts`, which exports `manifests`, a `readonly` tuple of the features' default-exported manifests, sorted by folder name;
   - `features/_registry/{client,server,web,mobile}.ts`, which export `clientParts`, `serverParts`, `webParts` and `mobileParts`: objects keyed by feature folder name, whose values are the namespace imports of `<feature>/<part>/index.ts`;
   - `platform/_registry/server.ts`, which exports `serverParts` for platform modules.
-- Produces the package entry points `@tsa/features/registry/{manifests,client,server,web,mobile}`. Only the apps may import them; Task 8's scan enforces that.
+- Produces the package entry points `@tsa/features/_registry/{manifests,client,server,web,mobile}` and `@tsa/platform/_registry/server`. They are named like their folders, so no module name can collide with them (decision D14). Only the apps may import them; Task 8's scan enforces that.
 
 - [ ] **Step 1: branch**
 
@@ -926,11 +946,11 @@ In `apps/web/package.json`, set `"@types/node"`, `"typescript"` and `"vitest"` t
   "type": "module",
   "sideEffects": false,
   "exports": {
-    "./registry/manifests": "./_registry/manifests.ts",
-    "./registry/client": "./_registry/client.ts",
-    "./registry/server": "./_registry/server.ts",
-    "./registry/web": "./_registry/web.ts",
-    "./registry/mobile": "./_registry/mobile.ts",
+    "./_registry/manifests": "./_registry/manifests.ts",
+    "./_registry/client": "./_registry/client.ts",
+    "./_registry/server": "./_registry/server.ts",
+    "./_registry/web": "./_registry/web.ts",
+    "./_registry/mobile": "./_registry/mobile.ts",
     "./*/manifest": "./*/manifest.ts",
     "./*/core": "./*/core/index.ts",
     "./*/client": "./*/client/index.ts",
@@ -949,7 +969,7 @@ In `apps/web/package.json`, set `"@types/node"`, `"typescript"` and `"vitest"` t
   "type": "module",
   "sideEffects": false,
   "exports": {
-    "./registry/server": "./_registry/server.ts",
+    "./_registry/server": "./_registry/server.ts",
     "./*/core": "./*/core/index.ts",
     "./*/client": "./*/client/index.ts",
     "./*/server": "./*/server/index.ts",
@@ -1090,11 +1110,6 @@ describe("buildRegistry", () => {
     expect(() => buildRegistry(root)).toThrow("features/money has no manifest.ts");
   });
 
-  it("refuses the reserved name registry", () => {
-    touch("features/registry/manifest.ts");
-    expect(() => buildRegistry(root)).toThrow('"registry" is reserved');
-  });
-
   it("refuses a module name that cannot become an import", () => {
     touch("features/Money/manifest.ts");
     expect(() => buildRegistry(root)).toThrow('"Money" is not a valid module name');
@@ -1154,8 +1169,6 @@ export const FEATURE_PARTS = ['client', 'server', 'web', 'mobile'];
 /** Platform modules register only their server part (commands and pulls). */
 export const PLATFORM_PARTS = ['server'];
 const NAME = /^[a-z][a-z0-9-]*$/;
-/** @tsa/features exports ./registry/* for the generated files, so no feature may take that name. */
-const RESERVED = new Set(['registry']);
 const HEADER = '// GENERATED by tools/registry-gen. Do not edit: `pnpm install` rewrites it.\n';
 
 /**
@@ -1222,7 +1235,6 @@ function listModules(dir) {
     .sort();
   for (const name of names) {
     if (!NAME.test(name)) throw new Error(`"${name}" is not a valid module name: use lowercase letters, digits and dashes`);
-    if (RESERVED.has(name)) throw new Error(`"${name}" is reserved: @tsa/features exports ./${name}/* for the generated files`);
   }
   return names;
 }
@@ -1264,7 +1276,7 @@ function mapFile(entries, part) {
 pnpm --filter @tsa/registry-gen test
 pnpm --filter @tsa/registry-gen typecheck
 ```
-Expected: `Tests 11 passed (11)`, and `tsc` exits 0.
+Expected: `Tests 10 passed (10)`, and `tsc` exits 0.
 
 - [ ] **Step 9: the command-line entry point** `tools/registry-gen/cli.mjs`:
 
@@ -1315,7 +1327,7 @@ pnpm test
 Expected:
 - vitest is still 4.1.11 in `@tsa/web`, since the catalog range equals the old one;
 - `pnpm typecheck` passes for `@tsa/web` and `@tsa/registry-gen`;
-- `pnpm test` shows the web suite at `Tests T passed`, exactly the baseline, plus `@tsa/registry-gen` at 11.
+- `pnpm test` shows the web suite at `Tests T passed`, exactly the baseline, plus `@tsa/registry-gen` at 10.
 
 - [ ] **Step 12: commit**
 
@@ -1343,12 +1355,12 @@ git commit -m "feat: add the features and platform packages and the registry gen
   - `scanRepo(options: { root: string; scanRoots?: string[]; tsconfigs?: Record<string, string> }): { violations: Violation[]; scannedFiles: string[] }`, where `Violation` is `{ file; line; specifier; reason }`;
   - `packageName(specifier: string): string | null`;
   - `SCAN_ROOTS = ["apps/web", "apps/mobile/src", "features", "platform", "reference"]`.
-- Task 10 adds `"apps/mobile": "apps/mobile/tsconfig.json"` to `repo.test.ts`'s `tsconfigs`.
+- Task 10 adds an `apps/mobile` assertion to `repo.test.ts`. The mobile app uses no path alias, so it needs no tsconfig entry.
 
 **What the rules say.** This is spec §0's zone table, with the interpretations it left open written down:
 - A part may import only the parts its row lists: core imports core; client imports core and client; server imports core, server and its **own** db; db imports core, its own db and platform db (the foreign-key targets); web imports core, client and web; mobile imports core, client and mobile.
 - Features never import each other, the platform never imports a feature, and reference imports only reference.
-- Only the apps import the generated registry. `apps/web` may import web, client, core and server parts, because routes are one-line re-exports and API routes re-export server handlers. `apps/mobile` may import mobile, client and core parts.
+- Only the apps import the generated registry, and the generated files may import any feature or platform part, since that is their job. `apps/web` may import web, client, core and server parts, because routes are one-line re-exports and API routes re-export server handlers. `apps/mobile` may import mobile, client and core parts.
 - Package bans follow the "Never" column. `core` and `client` may not use Node built-ins, and neither may `mobile`, since React Native has none. `server`, `db`, `web` and `apps/web` may.
 - Test files are unrestricted within the ownership rules. Only test files may use a computed `import()` or `require()`: the one computed import in today's app is `lib/tokens.test.ts:194`.
 - `require.context` is refused everywhere, because it bypasses the registry.
@@ -1723,7 +1735,7 @@ pnpm --filter @tsa/boundaries exec vitest run src/zones.test.ts
 ```
 Expected: `Tests 22 passed (22)`.
 
-- [ ] **Step 6: failing test for the rules** `tools/boundaries/src/rules.test.ts`. Every rule has one case it must refuse and a neighbouring case it must allow. Before this plan was written, each rule line was deleted or inverted in turn, and at least one row went red every time. Three rules that no row could isolate turned out to be redundant with the part table and were removed.
+- [ ] **Step 6: failing test for the rules** `tools/boundaries/src/rules.test.ts`. Every rule has one case it must refuse and a neighbouring case it must allow. Before this plan was written, each rule line was deleted or inverted in turn, and at least one row went red every time. Three rules that no row could isolate turned out to be redundant with the part table and were removed. The "generated registry → feature part" row was added after Fable's review of this plan, which caught that the ownership rule would otherwise flag the generated registry.
 
 ```ts
 import { describe, expect, it } from "vitest";
@@ -1807,6 +1819,7 @@ describe("checkEdge: registry and apps", () => {
     ["feature → registry", moneyServer, to("feature", "_registry", "registry"), false],
     ["platform → registry", syncCore, to("feature", "_registry", "registry"), false],
     ["feature test → registry", moneyTest, to("platform", "_registry", "registry"), false],
+    ["generated registry → feature part", z("feature", "_registry", "registry"), to("feature", "money", "server"), true],
     ["web app → feature web", web, to("feature", "money", "web"), true],
     ["web app → feature server", web, to("feature", "money", "server"), true],
     ["web app → feature mobile", web, to("feature", "money", "mobile"), false],
@@ -1944,6 +1957,8 @@ function checkZone(from: Zone, to: Zone): string | null {
   const sameOwner = from.layer === to.layer && from.owner === to.owner;
   if (to.layer === "app") return from.layer === "app" && sameOwner ? null : `nothing imports into apps/${to.owner}`;
   if (to.part === "registry") return from.layer === "app" ? null : "only the apps import the generated registry";
+  // Generated code: it imports every feature's parts by design, and only the apps import it.
+  if (from.part === "registry") return null;
 
   if (from.layer === "app") {
     const allowed = APP_PARTS[from.owner] ?? [];
@@ -1952,7 +1967,7 @@ function checkZone(from: Zone, to: Zone): string | null {
   if (from.layer === "feature" && to.layer === "feature" && !sameOwner) return "features never import each other";
   if (from.layer === "platform" && to.layer === "feature") return "the platform never imports a feature";
   if (from.layer === "reference" && to.layer !== "reference") return "reference imports only reference";
-  if (from.part === "test" || from.part === "registry" || from.part === null) return null;
+  if (from.part === "test" || from.part === null) return null;
 
   if (from.part === "manifest") {
     return to.layer === "platform" && to.owner === "registry" && to.part === "core"
@@ -1975,7 +1990,7 @@ function describe(zone: Zone): string {
 ```powershell
 pnpm --filter @tsa/boundaries exec vitest run src/rules.test.ts
 ```
-Expected: `Tests 85 passed (85)`.
+Expected: `Tests 86 passed (86)`.
 
 - [ ] **Step 8: failing test for the scan** `tools/boundaries/src/scan.test.ts`. The fixture repo is built in a temp folder, so deliberately broken code never sits in the tree for a type-check to trip on. The file holds exactly one violation per bad file and none in the good ones, and the assertion is the whole list, so any change in behavior turns it red. The `@fx` scope keeps the fixture's package names from ever colliding with the real `@tsa/*` ones.
 
@@ -2013,6 +2028,7 @@ const FIXTURE: Record<string, string> = {
   "features/money/web/Home.tsx": "export const Home = () => <main />;\n",
   "features/money/utils.ts": "export const stray = 1;\n",
   "features/polls/core/p.ts": "export const p = 1;\n",
+  "features/_registry/server.ts": "import * as money from '../money/server/s';\nexport const serverParts = { money };\n",
   "apps/web/package.json": JSON.stringify({ name: "@fx/web", private: true }, null, 2),
   "apps/web/page.tsx": 'import { Home } from "../../features/money/web/Home";\nimport "react-native";\nexport default Home;\n',
   "apps/mobile/package.json": JSON.stringify({ name: "@fx/mobile", private: true }, null, 2),
@@ -2061,7 +2077,8 @@ describe("scanRepo coverage", () => {
     expect(scannedFiles).toContain("apps/web/page.tsx");
     expect(scannedFiles).toContain("apps/mobile/src/index.tsx");
     expect(scannedFiles).not.toContain("features/package.json");
-    expect(scannedFiles).toHaveLength(20);
+    expect(scannedFiles).toContain("features/_registry/server.ts");
+    expect(scannedFiles).toHaveLength(21);
   });
 });
 
@@ -2300,7 +2317,7 @@ Expected: FAIL, naming `apps/web/lib/_probe.ts:1` and `apps/web may not import r
 pnpm --filter @tsa/boundaries test
 pnpm --filter @tsa/boundaries typecheck
 ```
-Expected: `Tests 131 passed (131)` (11 + 22 + 85 + 11 + 2), and `tsc` exits 0.
+Expected: `Tests 132 passed (132)` (11 + 22 + 86 + 11 + 2), and `tsc` exits 0.
 
 - [ ] **Step 13: CI runs every package's checks.** In `.github/workflows/ci.yml`'s `test` job, replace `pnpm --filter @tsa/web exec tsc --noEmit` with:
 
@@ -2317,7 +2334,7 @@ git commit -m "feat: add the boundary scan that decides spec §0's zone rules" -
 git push -u origin feat/workspace-tools
 gh pr create --base main --title "feat: registry generator and boundary scan" --body "<summary; the rule interpretations from Task 8; test counts; scannedFiles.length; the probe check; test plan>"
 ```
-Expected: CI goes green, with `pnpm typecheck` covering web and both tools and `pnpm test` running web, registry-gen (11) and boundaries (131). The Vercel preview is Ready, because the root `postinstall` runs there too. Check the build log for the `registry-gen: wrote` lines.
+Expected: CI goes green, with `pnpm typecheck` covering web and both tools and `pnpm test` running web, registry-gen (10) and boundaries (132). The Vercel preview is Ready, because the root `postinstall` runs there too. Check the build log for the `registry-gen: wrote` lines.
 
 - [ ] **Step 15 (owner): merge PR 3**, rebase-merge. Delete the branch only after `gh pr view <n> --json state` says `MERGED`.
 
@@ -2383,7 +2400,7 @@ Expected:
 - Delete: the template's `App.tsx`, `index.ts` and `app.json`
 
 **Interfaces:**
-- Consumes: `@tsa/features/registry/manifests` (Task 7), which exports `manifests` as an empty tuple while no feature exists.
+- Consumes: `@tsa/features/_registry/manifests` (Task 7), which exports `manifests` as an empty tuple while no feature exists.
 - Produces: the package `@tsa/mobile`, with the scripts `start`, `android`, `test`, `typecheck` and `export`. Its home screen shows `Travel super app` and `0 apps registered`. That text is how Task 12 sees, on the emulator, that the generated registry reached Metro.
 
 - [ ] **Step 1: branch, and pick the SDK**
@@ -2476,7 +2493,7 @@ Expected: both print `react 19.2.3`, one physical copy.
 ```powershell
 cd apps\mobile
 pnpm exec expo install expo-router react-native-safe-area-context react-native-screens expo-linking expo-constants expo-status-bar expo-dev-client expo-build-properties
-pnpm exec expo install jest-expo jest @types/jest @testing-library/react-native -- -D
+pnpm exec expo install jest-expo jest @types/jest @testing-library/react-native --dev
 cd ..\..
 Select-String -Path apps\mobile\package.json -Pattern '"react(-native)?":'
 ```
@@ -2537,7 +2554,7 @@ export default function RootLayout() {
 `apps/mobile/src/app/index.tsx`:
 ```tsx
 import { StyleSheet, Text, View } from "react-native";
-import { manifests } from "@tsa/features/registry/manifests";
+import { manifests } from "@tsa/features/_registry/manifests";
 
 // The skeleton's only job: prove the app builds, and that the generated registry
 // reaches Metro through the workspace (spec §0 "Registry"). The launcher that
@@ -2590,21 +2607,16 @@ pnpm --filter @tsa/mobile export
 ```
 Expected:
 - `Dependencies are up to date`. This command asks Expo's API, so it needs the network.
-- The export writes `apps/mobile/dist/` with an Android and an iOS bundle, and no error such as `Unable to resolve module @tsa/features/registry/manifests`. `dist/` is covered by the template's `.gitignore`.
+- The export writes `apps/mobile/dist/` with an Android and an iOS bundle, and no error such as `Unable to resolve module @tsa/features/_registry/manifests`. `dist/` is covered by the template's `.gitignore`.
 
-- [ ] **Step 12: the scan now covers the mobile app.** In `tools/boundaries/src/repo.test.ts`, change `TSCONFIGS` to:
-
-```ts
-const TSCONFIGS = { "apps/web": "apps/web/tsconfig.json", "apps/mobile": "apps/mobile/tsconfig.json" };
-```
-and add to the first test:
+- [ ] **Step 12: the scan now covers the mobile app.** The scan already walks `apps/mobile/src` (`SCAN_ROOTS`). The mobile app uses no path alias, so `TSCONFIGS` stays as it is. In `tools/boundaries/src/repo.test.ts`, add to the first test:
 ```ts
     expect(scannedFiles).toContain("apps/mobile/src/app/index.tsx");
 ```
 ```powershell
 pnpm --filter @tsa/boundaries test
 ```
-Expected: `Tests 131 passed (131)`. The mobile screen imports `react-native`, `expo-router` and the registry, and all three are allowed for `apps/mobile`.
+Expected: `Tests 132 passed (132)`. The mobile screen imports `react-native`, `expo-router` and the registry, and all three are allowed for `apps/mobile`.
 
 - [ ] **Step 13: the web app on React 19.2.3**
 
@@ -2834,8 +2846,11 @@ Expected: `BUILD SUCCESSFUL`, then `Installing ... on emulator-5554`, then the a
 - [ ] **Step 3: keep the proof**
 
 ```powershell
-adb exec-out screencap -p > "$env:TEMP\phase0-emulator.png"
+adb shell screencap -p /sdcard/phase0-emulator.png
+adb pull /sdcard/phase0-emulator.png "$env:TEMP\phase0-emulator.png"
 ```
+Don't use `adb exec-out screencap -p > file.png` here. In PowerShell 5.1, `>` re-encodes a native command's output as UTF-16 text, which corrupts the PNG.
+
 Look at the screenshot and confirm both lines of text. Attach it to PR 4's description, or send it to the owner.
 
 Known failures and their fixes:
@@ -2869,7 +2884,7 @@ Continue only when it prints `58.x`.
 git switch main; git pull --ff-only
 git switch -c chore/expo-sdk-58
 cd apps\mobile
-pnpm exec expo install expo@^58.0.0 -- --fix
+pnpm exec expo install expo@^58.0.0 --fix
 cd ..\..
 ```
 `--fix` may rewrite the `catalog:` entries in `apps/mobile/package.json` to plain versions:
@@ -2887,7 +2902,7 @@ pnpm --filter @tsa/mobile exec jest
 pnpm --filter @tsa/mobile export
 pnpm --filter @tsa/web test
 pnpm --filter @tsa/boundaries test
-Remove-Item -Recurse -Force apps\mobile\android
+Remove-Item -Recurse -Force apps\mobile\android -ErrorAction SilentlyContinue
 pnpm --filter @tsa/mobile android
 ```
 Expected:
@@ -2909,7 +2924,7 @@ SDK 58 needs Node ^22.13, ^24.3 or 26+, and Node 24.14 is fine. It also rewrote 
   - all checks green on `main`;
   - Vercel preview Ready from `apps/web`;
   - development build on the emulator (the screenshot);
-  - `pnpm test` counts: web T; registry-gen 11; boundaries 131; mobile 1;
+  - `pnpm test` counts: web T; registry-gen 10; boundaries 132; mobile 1;
   - the docs-only PR showing the four jobs skipped (Task 11, Step 3);
   - a nightly refresh committing to `apps/web/` paths (Task 6, Step 6).
 
