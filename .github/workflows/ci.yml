@@ -31,7 +31,7 @@ jobs:
       # Every --filter in this file carries --fail-if-no-match: pnpm exits 0
       # when a filter matches no package ("No projects matched the filters"),
       # so a rename or a typo would turn the step into a silent no-op.
-      - run: pnpm --filter @tsa/web --fail-if-no-match exec tsc --noEmit
+      - run: pnpm typecheck
       - run: pnpm test
       # The `server-only` guard on apps/web/lib/server/airports.ts, cityIndex.ts,
       # catalog.ts and cityEnrichment.ts is only guaranteed to fire in a

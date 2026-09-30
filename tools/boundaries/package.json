@@ -1,0 +1,17 @@
+{
+  "name": "@tsa/boundaries",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "oxc-parser": "0.152.0",
+    "oxc-resolver": "11.24.2",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}
