@@ -138,7 +138,7 @@ export default defineConfig({
   ],
 
   webServer: {
-    command: "npm run dev -- -p 3100",
+    command: "pnpm exec next dev -p 3100",
     url: "http://localhost:3100/login",
     reuseExistingServer: !process.env.CI,
     timeout: 180_000,

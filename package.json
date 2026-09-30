@@ -2,6 +2,10 @@
   "name": "china-itinerary-planner",
   "version": "0.2.0",
   "private": true,
+  "packageManager": "pnpm@10.34.6",
+  "engines": {
+    "node": "24.x"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -32,11 +36,13 @@
     "@testing-library/jest-dom": "^7.0.1",
     "@testing-library/react": "^16.3.2",
     "@types/d3-geo": "^3.1.1",
+    "@types/geojson": "^7946.0.16",
     "@types/node": "^26.2.0",
     "@types/pg": "^8.23.1",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.4",
     "@types/topojson-client": "^3.1.5",
+    "@types/topojson-specification": "^1.0.5",
     "geotiff": "^3.0.5",
     "jsdom": "^29.1.1",
     "postcss": "^8.5.6",
