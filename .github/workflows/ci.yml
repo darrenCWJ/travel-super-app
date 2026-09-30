@@ -18,16 +18,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+      # Takes the pnpm version from package.json's packageManager.
+      - uses: pnpm/action-setup@v6
       - uses: actions/setup-node@v5
         with:
           node-version: 24
-          cache: npm
-      # legacy-peer-deps: .npmrc sets it, and `npm ci` honours it. Kept
-      # explicit here so a future .npmrc change surfaces as a CI failure
-      # rather than a mystery resolution difference against local installs.
-      - run: npm ci
-      - run: npx tsc --noEmit
-      - run: npm test
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec tsc --noEmit
+      - run: pnpm test
       # The `server-only` guard on lib/server/airports.ts, cityIndex.ts,
       # catalog.ts and cityEnrichment.ts is only guaranteed to fire in a
       # production build: it is what turns a client import of a multi-megabyte
@@ -40,7 +39,7 @@ jobs:
       # 2026-09-06: a client import of lib/server/catalog fails this command
       # with the full import trace; so, on 2026-09-24, did one of
       # lib/server/cityEnrichment. Measured at 8-19 s locally.
-      - run: npx next build
+      - run: pnpm build
 
   # A separate job from `test`, deliberately: a browser download and a Next
   # build are minutes of work that the unit gate should not wait behind, and a
@@ -50,15 +49,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+      # Takes the pnpm version from package.json's packageManager.
+      - uses: pnpm/action-setup@v6
       - uses: actions/setup-node@v5
         with:
           node-version: 24
-          cache: npm
-      - run: npm ci
-      # The npm cache does not cover ~/.cache/ms-playwright, so without this
-      # every run re-downloads the browser. Keyed on the resolved Playwright
-      # version rather than on the lockfile hash, because that is what decides
-      # which browser build is wanted.
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # The pnpm store cache does not cover ~/.cache/ms-playwright, so without
+      # this every run re-downloads the browser. Keyed on the resolved
+      # Playwright version rather than on the lockfile hash, because that is
+      # what decides which browser build is wanted.
       - name: Resolve Playwright version
         id: pw
         run: echo "version=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
@@ -70,8 +71,8 @@ jobs:
       # `--with-deps` pulls the system libraries the browser needs on
       # ubuntu-latest. Still run on a cache hit, because the cache restores the
       # browser binaries and not the apt packages beside them.
-      - run: npx playwright install --with-deps chromium
-      - run: npx playwright test
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm exec playwright test
         env:
           # Not a secret. It signs sessions in a throwaway SQLite file that
           # exists for the length of one job, and the same value is committed

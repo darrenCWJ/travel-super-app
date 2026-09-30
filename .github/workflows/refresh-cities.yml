@@ -68,7 +68,7 @@
 # that call to be made, rather than in a production incident. The gate is
 # strict across the split: `commit` needs BOTH ingests, so a failed `facts`
 # still withholds the `cities` work. That is deliberate — the two artifacts are
-# verified together by one `npm test`, and committing half of a verified pair
+# verified together by one `pnpm test`, and committing half of a verified pair
 # is not something this file is willing to do silently.
 #
 # GeoNames is CC BY 4.0 — attribution required. The credit lives in
@@ -127,12 +127,13 @@ jobs:
           # drift. enrich-cities.mjs is node:fs|path|url only and doesn't need it
           # for that reason, but runs under the same setup-node step.
           node-version: 24
-      # No `npm ci` here any more, and no `cache: npm`: both ingest scripts run
+      # No install here any more, and no package cache: both ingest scripts run
       # on Node built-ins alone, so this job needs no node_modules and now
       # starts ingesting immediately. That does drop the old fail-fast on a
-      # broken lockfile — accepted, because ci.yml runs `npm ci` on every push
-      # to every branch, so a lockfile that cannot install is already red
-      # before it can reach a nightly run. `commit` still installs, for vitest.
+      # broken lockfile — accepted, because ci.yml runs
+      # `pnpm install --frozen-lockfile` on every push to every branch, so a
+      # lockfile that cannot install is already red before it can reach a
+      # nightly run. `commit` still installs, for vitest.
 
       - name: Ingest cities
         run: node scripts/ingest-cities.mjs
@@ -215,15 +216,15 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
+      - uses: pnpm/action-setup@v6
+
       - uses: actions/setup-node@v5
         with:
           node-version: 24
-          cache: npm
+          cache: pnpm
 
       # This install is for vitest, so "Verify the artifacts" below can run.
-      # legacy-peer-deps: .npmrc sets it and `npm ci` honours it, kept explicit
-      # for the reason ci.yml gives.
-      - run: npm ci --legacy-peer-deps
+      - run: pnpm install --frozen-lockfile
 
       - uses: actions/download-artifact@v8
         with:
@@ -260,13 +261,13 @@ jobs:
       # lib/server/cityIndex.test.ts and lib/countryFacts.test.ts are the
       # files that read these artifacts off disk today, but naming them here
       # would be a list that silently stops being complete the day someone
-      # adds a fourth. `npm test` is also literally ci.yml's gate, which is
-      # the point — see the header. `npx tsc --noEmit`, ci.yml's other half,
-      # is deliberately not repeated: these scripts write JSON only, so every
-      # TypeScript file in the tree is byte-identical to the commit CI
+      # adds a fourth. `pnpm test` is also literally ci.yml's gate, which is
+      # the point — see the header. `pnpm exec tsc --noEmit`, ci.yml's other
+      # half, is deliberately not repeated: these scripts write JSON only, so
+      # every TypeScript file in the tree is byte-identical to the commit CI
       # already type-checked.
       - name: Verify the artifacts against the repo's own tests
-        run: npm test
+        run: pnpm test
 
       - name: Commit if the catalog or facts changed
         run: |
