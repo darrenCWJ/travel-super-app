@@ -1,4 +1,4 @@
-# Refreshes data/airports.json from the OurAirports nightly CSV.
+# Refreshes apps/web/data/airports.json from the OurAirports nightly CSV.
 #
 # Commits only when the airport set actually changed. The ingest script
 # preserves the previous `generatedAt` when the data is identical, so an
@@ -52,16 +52,17 @@ jobs:
           package-manager-cache: false
 
       - name: Ingest airports
+        working-directory: apps/web
         run: node scripts/ingest-airports.mjs
 
       - name: Commit if the data changed
         run: |
-          if git diff --quiet -- data/airports.json; then
+          if git diff --quiet -- apps/web/data/airports.json; then
             echo "No change in the airport set — nothing to commit."
             exit 0
           fi
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add data/airports.json data/airports-report.md
+          git add apps/web/data/airports.json apps/web/data/airports-report.md
           git commit -m "chore: refresh airports from OurAirports"
           git push

@@ -6,6 +6,10 @@
 # nothing is added anywhere in the UI for this one; see
 # data/climate-report.md's own Source section for the record.
 #
+# The web app lives in apps/web/ and the ingest step runs from there. A path in
+# these comments that does not start with apps/ is relative to it, so
+# public/climate/ means apps/web/public/climate/.
+#
 # workflow_dispatch ONLY. No `schedule:` key, on purpose. These are WMO
 # climate normals recalculated once a decade (1981-2010 is the current
 # release), not something that moves week to week the way airports or cities
@@ -86,7 +90,7 @@
 # rather than Node built-ins alone. The same install also provides vitest for
 # the verify step below.
 #
-# Commit condition: `git status --porcelain -- public/climate`, not
+# Commit condition: `git status --porcelain -- apps/web/public/climate`, not
 # `git diff --quiet`. Same reasoning as refresh-cities.yml's catalog watch:
 # this build mirrors public/cities/ country by country, so a country newly
 # given a climate row arrives as an untracked shard, and `git diff` cannot
@@ -179,25 +183,26 @@ jobs:
       - run: pnpm install --frozen-lockfile
 
       - name: Ingest climate normals
+        working-directory: apps/web
         run: node scripts/ingest-climate.mjs
 
       # The whole suite, not a hand-picked subset — same reasoning as
       # refresh-cities.yml's identically named step: ci.yml never runs on
       # this workflow's own commit (see header), so this is the only gate
-      # standing between a bad build and a production deploy. `pnpm exec tsc
-      # --noEmit` is deliberately not repeated: this script writes JSON
-      # only, so every TypeScript file in the tree is byte-identical to what
-      # the push that put this commit on the dispatch branch already
-      # type-checked.
+      # standing between a bad build and a production deploy.
+      # `pnpm --filter @tsa/web exec tsc --noEmit` is deliberately not
+      # repeated: this script writes JSON only, so every TypeScript file in
+      # the tree is byte-identical to what the push that put this commit on
+      # the dispatch branch already type-checked.
       - name: Verify the artifacts against the repo's own tests
-        run: pnpm test
+        run: pnpm --filter @tsa/web test
 
       - name: Commit if the climate normals changed
         run: |
           # git status --porcelain, not git diff --quiet: see "Commit
           # condition" in the header — a newly covered country's shard
           # arrives untracked, and git diff cannot see untracked files.
-          CHANGED="$(git status --porcelain -- public/climate)"
+          CHANGED="$(git status --porcelain -- apps/web/public/climate)"
           if [ -z "$CHANGED" ]; then
             echo "No change in the climate normals — nothing to commit."
             exit 0
@@ -210,7 +215,7 @@ jobs:
           # app reads, so it rides along with a real change instead of being
           # able to cause one — same treatment refresh-cities.yml gives
           # data/cities-report.md.
-          git add public/climate data/climate-report.md
+          git add apps/web/public/climate apps/web/data/climate-report.md
           git commit -m "chore: refresh climate normals from CHELSA"
           # The concurrency group keeps the other two refresh workflows out
           # of this window, but a human push to the dispatch branch can

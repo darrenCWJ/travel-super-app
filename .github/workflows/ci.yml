@@ -25,9 +25,12 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm exec tsc --noEmit
+      # tsc (and, in `e2e`, playwright) is a devDependency of @tsa/web, so its
+      # bin does not resolve at the workspace root: run it through --filter.
+      # `pnpm test` and `pnpm build` below are root scripts that delegate.
+      - run: pnpm --filter @tsa/web exec tsc --noEmit
       - run: pnpm test
-      # The `server-only` guard on lib/server/airports.ts, cityIndex.ts,
+      # The `server-only` guard on apps/web/lib/server/airports.ts, cityIndex.ts,
       # catalog.ts and cityEnrichment.ts is only guaranteed to fire in a
       # production build: it is what turns a client import of a multi-megabyte
       # artifact, or of a Wikidata call whose User-Agent Chromium would drop,
@@ -59,9 +62,12 @@ jobs:
       # The pnpm store cache does not cover ~/.cache/ms-playwright, so without
       # this every run re-downloads the browser. Keyed on the resolved
       # Playwright version rather than on the lockfile hash, because that is
-      # what decides which browser build is wanted.
+      # what decides which browser build is wanted. Run from apps/web because
+      # node resolves @playwright/test from the working directory, and it is
+      # that package's dependency.
       - name: Resolve Playwright version
         id: pw
+        working-directory: apps/web
         run: echo "version=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
       - uses: actions/cache@v4
         id: pw-cache
@@ -71,19 +77,20 @@ jobs:
       # `--with-deps` pulls the system libraries the browser needs on
       # ubuntu-latest. Still run on a cache hit, because the cache restores the
       # browser binaries and not the apt packages beside them.
-      - run: pnpm exec playwright install --with-deps chromium
-      - run: pnpm exec playwright test
+      - run: pnpm --filter @tsa/web exec playwright install --with-deps chromium
+      - run: pnpm --filter @tsa/web exec playwright test
         env:
           # Not a secret. It signs sessions in a throwaway SQLite file that
           # exists for the length of one job, and the same value is committed
-          # in playwright.config.ts. It has to be >= 24 chars and must not be
-          # one of the placeholders lib/authSecret.ts rejects.
+          # in apps/web/playwright.config.ts. It has to be >= 24 chars and
+          # must not be one of the placeholders apps/web/lib/authSecret.ts
+          # rejects.
           CI: "true"
       - uses: actions/upload-artifact@v4
         if: ${{ !cancelled() }}
         with:
           name: playwright-report
           path: |
-            playwright-report/
-            test-results/
+            apps/web/playwright-report/
+            apps/web/test-results/
           retention-days: 7
