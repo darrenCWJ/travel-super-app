@@ -1,5 +1,5 @@
 {
- "generatedAt": "2026-09-29T15:07:29.706Z",
+ "generatedAt": "2026-09-30T15:22:21.095Z",
  "source": "GeoNames cities500 (CC BY 4.0)",
  "countries": [
   {
@@ -55,7 +55,7 @@
   {
    "code": "AT",
    "count": 750,
-   "generatedAt": "2026-09-29T15:07:29.706Z"
+   "generatedAt": "2026-09-30T15:22:21.095Z"
   },
   {
    "code": "AU",
@@ -180,7 +180,7 @@
   {
    "code": "CA",
    "count": 750,
-   "generatedAt": "2026-09-03T09:27:18.747Z"
+   "generatedAt": "2026-09-30T15:22:21.095Z"
   },
   {
    "code": "CC",
@@ -385,12 +385,12 @@
   {
    "code": "GE",
    "count": 218,
-   "generatedAt": "2026-08-29T15:36:54.681Z"
+   "generatedAt": "2026-09-30T15:22:21.095Z"
   },
   {
    "code": "GF",
-   "count": 20,
-   "generatedAt": "2026-08-29T15:36:54.681Z"
+   "count": 21,
+   "generatedAt": "2026-09-30T15:22:21.095Z"
   },
   {
    "code": "GG",
@@ -429,8 +429,8 @@
   },
   {
    "code": "GQ",
-   "count": 27,
-   "generatedAt": "2026-09-03T09:27:18.747Z"
+   "count": 28,
+   "generatedAt": "2026-09-30T15:22:21.095Z"
   },
   {
    "code": "GR",
