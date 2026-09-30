@@ -72,8 +72,9 @@
 # that call to be made, rather than in a production incident. The gate is
 # strict across the split: `commit` needs BOTH ingests, so a failed `facts`
 # still withholds the `cities` work. That is deliberate — the two artifacts are
-# verified together by one `pnpm test`, and committing half of a verified pair
-# is not something this file is willing to do silently.
+# verified together by one run of the web app's suite,
+# `pnpm --filter @tsa/web --fail-if-no-match test`, and committing half of a
+# verified pair is not something this file is willing to do silently.
 #
 # GeoNames is CC BY 4.0 — attribution required. The credit lives in
 # components/plan/GeoNamesCredit.tsx, not here. Wikidata (country facts) is
@@ -132,8 +133,8 @@ jobs:
           # for that reason, but runs under the same setup-node step.
           node-version: 24
           # This job installs nothing, so pnpm is not on PATH. Without this,
-          # setup-node v5 sees package.json's packageManager and tries to
-          # restore a pnpm cache, which fails before the job starts.
+          # setup-node v5 sees the root package.json's packageManager and
+          # tries to restore a pnpm cache, which fails before the job starts.
           package-manager-cache: false
       # No install here any more, and no package cache (`package-manager-cache:
       # false` above stops setup-node starting one): both ingest scripts run
@@ -194,8 +195,8 @@ jobs:
           # rather than inheriting whatever the runner image ships.
           node-version: 24
           # This job installs nothing, so pnpm is not on PATH. Without this,
-          # setup-node v5 sees package.json's packageManager and tries to
-          # restore a pnpm cache, which fails before the job starts.
+          # setup-node v5 sees the root package.json's packageManager and
+          # tries to restore a pnpm cache, which fails before the job starts.
           package-manager-cache: false
 
       # A third, independent source (Wikidata), still covered by "Verify the
@@ -260,11 +261,16 @@ jobs:
           # step then behaves perfectly on stale data. Since the move nothing
           # tracked lives in data/ or public/ at the repo root, so either one
           # existing is that fingerprint; so is a data file sitting loose in the
-          # repo root or in apps/web/.
+          # repo root or in apps/web/. The mirror image is an artifact that
+          # lands too DEEP, which doubles a directory inside apps/web/ instead
+          # (data/data, data/apps, data/public, public/public, public/data and
+          # apps, all under apps/web/), so those are strays too.
           for stray in data public \
                        country-facts.json country-facts-report.md cities-index.json cities-enrich-targets.json cities-report.md \
                        apps/web/country-facts.json apps/web/country-facts-report.md apps/web/cities-index.json \
-                       apps/web/cities-enrich-targets.json apps/web/cities-report.md; do
+                       apps/web/cities-enrich-targets.json apps/web/cities-report.md \
+                       apps/web/apps apps/web/data/data apps/web/data/apps apps/web/data/public \
+                       apps/web/public/public apps/web/public/data; do
             if [ -e "$stray" ]; then
               echo "::error::$stray exists after download — an artifact root moved; fix the download path"
               exit 1
@@ -281,14 +287,18 @@ jobs:
       # lib/server/cityIndex.test.ts and lib/countryFacts.test.ts are the
       # files that read these artifacts off disk today, but naming them here
       # would be a list that silently stops being complete the day someone
-      # adds a fourth. `pnpm --filter @tsa/web test` is the web package's
-      # share of ci.yml's gate (`pnpm test`), which is the point — see the
-      # header. `pnpm --filter @tsa/web exec tsc --noEmit`, ci.yml's other
-      # half, is deliberately not repeated: these scripts write JSON only, so
-      # every TypeScript file in the tree is byte-identical to the commit CI
-      # already type-checked.
+      # adds a fourth. This is the web package's share of ci.yml's gate
+      # (`pnpm test`), which is the point — see the header. ci.yml's other
+      # half, `pnpm --filter @tsa/web --fail-if-no-match exec tsc --noEmit`,
+      # is deliberately not repeated: these scripts write JSON only, so every
+      # TypeScript file in the tree is byte-identical to the commit CI already
+      # type-checked.
+      #
+      # --fail-if-no-match is load-bearing: pnpm exits 0 when a filter matches
+      # no package, so without it a renamed @tsa/web would leave this step
+      # running nothing, green, and the commit below unguarded.
       - name: Verify the artifacts against the repo's own tests
-        run: pnpm --filter @tsa/web test
+        run: pnpm --filter @tsa/web --fail-if-no-match test
 
       - name: Commit if the catalog or facts changed
         run: |
