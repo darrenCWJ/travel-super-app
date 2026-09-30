@@ -1,6 +1,6 @@
 # Travel super app: architecture and product design
 
-**Status:** Design APPROVED by the owner on 2026-09-24 (option A, the layers, the Claude-file layout, the move to Singapore). Fable reviewed it on 2026-09-25: no critical findings; 7 important and 11 minor findings, which were checked against the evidence and applied. Two of its minor points were withdrawn with citations. **Revised on 2026-09-25 (§0)** for a native mobile app plus a website, invite-only first, and costs pushed to a final release-readiness phase. The owner approved this spec, including §0, and it was merged to main on 2026-09-25 (PR #42). Planning starts with phase 0 (§12). **Corrected on 2026-09-30:** §1, §4, §6, §7, §12 and §14 now match §0 where they still described the earlier single-app plan.
+**Status:** Design APPROVED by the owner on 2026-09-24 (option A, the layers, the Claude-file layout, the move to Singapore). Fable reviewed it on 2026-09-25: no critical findings; 7 important and 11 minor findings, which were checked against the evidence and applied. Two of its minor points were withdrawn with citations. **Revised on 2026-09-25 (§0)** for a native mobile app plus a website, invite-only first, and costs pushed to a final release-readiness phase. The owner approved this spec, including §0, and it was merged to main on 2026-09-25 (PR #42). Planning starts with phase 0 (§12). **Corrected on 2026-09-30:** §1, §2, §4, §6, §7, §12 and §14 now match §0 where they still described the earlier single-app plan.
 **Supersedes:** the "trip planner" framing of every earlier spec. Earlier specs remain the record of how today's code works.
 **Companion:** [`2026-09-24-travel-super-app-catalogue.md`](2026-09-24-travel-super-app-catalogue.md), which lists all 438 functions (today's, kept, changed or dropped, plus new ones) and the 181-entry decision register. Both are generated from the same data as the private pages *Travel Super App Blueprint* and *Travel Super App Catalogue*.
 
@@ -109,7 +109,7 @@ The 26 smaller questions raised by the catalogue are in §15. Each takes its rec
 
 ## 2. Architecture: one app, four layers
 
-> **Revised in §0:** there are now two apps (`apps/web`, `apps/mobile`) in a pnpm monorepo. Features gain `core`, `client`, `server`, `db`, `web` and `mobile` parts, and the registry is generated rather than globbed. The layer rules below still hold.
+> **Revised in §0:** there are now two apps (`apps/web`, `apps/mobile`) in a pnpm monorepo. Features gain `core`, `client`, `server`, `db`, `web` and `mobile` parts, and the registry is generated rather than globbed. The web routes move to `apps/web/src/app/` (§0), where the launcher lives at `/app`, not `/`. The layer rules below still hold.
 
 We chose option A: one Next.js app with our own offline sync layer. The alternatives were B (the PowerSync engine, about $68/month, one blocking upload queue shared by every app) and C (npm-workspace packages: heavy tooling, no gain for integrity).
 
@@ -223,7 +223,7 @@ The design follows Replicache's published push/pull protocol as a **specificatio
 > **Revised in §0:** the phone app uses MapLibre React Native 11.4, and offline trip packs are phone-only. They are MapLibre offline packs downloaded from a Z/X/Y tile Worker, because MapLibre Native can't build packs from `pmtiles://`. The website shows the street map online only. During development both clients use OpenFreeMap's public tiles; the Protomaps file on R2 and the tile Worker are paid for in phase 6 (§12).
 
 - **Where it lives:** a new platform module, `platform/places`, because Planner, Journal, Polls, Today and Explore all refer to places. Explore owns browsing, the detail sheet, contributing, sharing, rating and reporting. Moderation lives at `app/admin/places`. Features store `place_id … REFERENCES place(id) ON DELETE RESTRICT` and display it through `resolve(ids, viewer)`, which follows merges and applies visibility.
-- **Street map:** MapLibre GL 6.11 (pinned) on the website and MapLibre React Native 11.4 on the phone, with a Protomaps world file (about 138 GB, an ODbL Produced Work) copied into R2 each quarter, costing about $1.80/month. Tiles are served from a custom domain on Cloudflare DNS (free-plan requirement). A cache worker is added if cold reads from Singapore stay near 1 s. **Trip packs** cover the world overview, the trip's countries, then its cities at street detail (Tokyo + Kyoto ≈ 28 MB at zoom 14), stored on the phone as MapLibre offline packs. Pinning works by long-press or crosshair, and typed decimal/DMS coordinates or "use my location" are the accessible, no-WebGL alternatives. The d3-geo globe stays for choosing a country.
+- **Street map:** MapLibre GL 6.11 (pinned) on the website and MapLibre React Native 11.4 on the phone, with a Protomaps world file (about 138 GB, an ODbL Produced Work) copied into R2 each quarter, costing about $1.80/month. Tiles are served from a custom domain on Cloudflare DNS (free-plan requirement), through the Z/X/Y tile Worker (§0), which also caches them. **Trip packs** cover the world overview, the trip's countries, then its cities at street detail (Tokyo + Kyoto ≈ 28 MB at zoom 14), stored on the phone as MapLibre offline packs. Pinning works by long-press or crosshair, and typed decimal/DMS coordinates or "use my location" are the accessible, no-WebGL alternatives. The d3-geo globe stays for choosing a country.
 - **Search:** the app's own city and place files first (works offline, including reverse lookup to "near Kyoto, Japan"). After that, a server route `/api/geo/*` with a cache, using Photon and falling back to Geoapify's free tier; the provider is set in config. Nominatim is not used (its policy bans app autocomplete).
 - **Open sources:**
   - Wikidata tourist attractions (CC0, ranked by sitelinks) enter in the first release.
@@ -246,7 +246,7 @@ The design follows Replicache's published push/pull protocol as a **specificatio
 
 - The launcher is the home screen of the phone app and lives at `/app` on the website (`/` is the public landing page, §0). It has a group / trip switcher (device-local context), a **Now** strip, and an app grid filtered by the viewer's switches.
 - Each app contributes Now cards from `client.tsx`, computed from the local replica so they work offline. Examples: "Day 3 · Kyoto", "Dinner vote closes 18:00", "You owe Mei ¥2,000".
-- The platform adds its own cards for unsent changes, Needs attention, signing in again to send, installing the app, and welcome after an invite.
+- The platform adds its own cards for unsent changes, Needs attention, signing in again to send, and welcome after an invite. There is no install card: narrow web windows show a "Get the app" banner instead (§0).
 - Each tile has a 3-letter code in the boarding-pass style (PLN, MNY, VOT, DTS, JNL, TIX, PAK, MAP, BRF, TDY).
 - The brand's Chinese chops become English passport stamps. The display name is chosen in phase 3.
 
@@ -364,7 +364,7 @@ Each sub-project gets its own spec, then a plan, then small PRs. Nothing moves o
 ## 14. Risks
 
 - **The sync core is owner-maintained** (about 2.5k lines plus tests). Mitigated by the Replicache-shaped protocol, randomised replay tests against real Postgres, and one platform interface that PowerSync could later sit behind.
-- **No dependable background sync on phones.** Handled by a durable SQLite outbox, sending on resume, reconnect and a timer, and visible unsent counts. (Safari's storage eviction no longer applies, because phones use the native app, §0.)
+- **No dependable background sync on phones.** Handled by a durable SQLite outbox, sending on resume, reconnect and a timer, and visible unsent counts. (Safari's storage eviction no longer applies to the phone app, which is native, §0. It still applies to the website opened in a phone's browser.)
 - **Long offline trips versus sessions and deploys.** Handled by 90-day sessions and permanent command handlers.
 - **Drizzle v1 is a release candidate.** Pin the exact version; Kysely is the fallback.
 - **Mainland China reachability.** Install and download everything before entering.
