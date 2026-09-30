@@ -93,6 +93,16 @@ describe("buildRegistry", () => {
     expect(() => buildRegistry(root)).toThrow('"package" becomes the reserved word package');
   });
 
+  it("refuses a name the generated files already declare", () => {
+    touch("features/manifests/manifest.ts");
+    expect(() => buildRegistry(root)).toThrow('"manifests" becomes the reserved word manifests');
+  });
+
+  it("refuses a dashed name that becomes a constant the generated files declare", () => {
+    touch("features/client-parts/manifest.ts");
+    expect(() => buildRegistry(root)).toThrow('"client-parts" becomes the reserved word clientParts');
+  });
+
   it("refuses two names that become the same identifier", () => {
     touch("features/v-2/manifest.ts");
     touch("features/v2/manifest.ts");
