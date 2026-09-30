@@ -1,6 +1,6 @@
 # Travel super app: architecture and product design
 
-**Status:** Design APPROVED by the owner on 2026-09-24 (option A, the layers, the Claude-file layout, the move to Singapore). This spec is awaiting the owner's review before planning starts. Fable reviewed it on 2026-09-25: no critical findings; 7 important and 11 minor findings, which were checked against the evidence and applied. Two of its minor points were withdrawn with citations. **Revised on 2026-09-25 (§0)** for a native mobile app plus a website, invite-only first, and costs pushed to a final release-readiness phase.
+**Status:** Design APPROVED by the owner on 2026-09-24 (option A, the layers, the Claude-file layout, the move to Singapore). Fable reviewed it on 2026-09-25: no critical findings; 7 important and 11 minor findings, which were checked against the evidence and applied. Two of its minor points were withdrawn with citations. **Revised on 2026-09-25 (§0)** for a native mobile app plus a website, invite-only first, and costs pushed to a final release-readiness phase. The owner approved this spec, including §0, and it was merged to main on 2026-09-25 (PR #42). Planning starts with phase 0 (§12). **Corrected on 2026-09-30:** §1, §4, §6, §7, §12 and §14 now match §0 where they still described the earlier single-app plan.
 **Supersedes:** the "trip planner" framing of every earlier spec. Earlier specs remain the record of how today's code works.
 **Companion:** [`2026-09-24-travel-super-app-catalogue.md`](2026-09-24-travel-super-app-catalogue.md), which lists all 438 functions (today's, kept, changed or dropped, plus new ones) and the 181-entry decision register. Both are generated from the same data as the private pages *Travel Super App Blueprint* and *Travel Super App Catalogue*.
 
@@ -103,7 +103,7 @@ The trip planner becomes a **global travel super app**. A launcher home page ope
 | Exchange rates | Fetched automatically when online, stored on each expense, editable. This retires the earlier rule that fetched rates are display-only. |
 | Hosting | Raspberry Pi self-hosting is no longer a goal. Vercel + Neon + Cloudflare R2; the code stays host-agnostic. |
 | Solo trips | Every user gets an automatic personal group. |
-| Places | Attractions come from a combination of open sources plus community contributions (places, tips and notes, photos, ratings). Contributions are private to the group first, and sharing is opt-in. Moderation is publish-then-report. People geotag on a real street map, and the same place from any source is merged into one. Data for future ML recommendations is captured now; no ML is built now. |
+| Places | Attractions come from a combination of open sources plus community contributions (places, tips and notes, photos, ratings). Contributions are private to the group first, and sharing is opt-in. Moderation is filter, then publish, then report: the owner chose publish-then-report, and §0 adds the pre-publish filter that Apple 1.2 requires. People geotag on a real street map, and the same place from any source is merged into one. Data for future ML recommendations is captured now; no ML is built now. |
 
 The 26 smaller questions raised by the catalogue are in §15. Each takes its recommended answer unless the owner overrides it.
 
@@ -168,9 +168,14 @@ db/migrations/<ts>_money_…/   the one shared path: new folders only, never edi
 
 ## 4. Offline and sync
 
+> **Revised in §0:** there are two clients. The website keeps its outbox and replica in IndexedDB (Dexie), and the phone app keeps them in SQLite (`expo-sqlite`). The website has no service worker, install flow or `persist()`. The protocol below is unchanged.
+
 The design follows Replicache's published push/pull protocol as a **specification, not a dependency**. Replicache itself is in maintenance mode. Zero rejects writes when offline, Electric's managed cloud is winding down, and the CRDT frameworks replace Postgres. All were ruled out.
 
-- **Phone:** Dexie 4.4 keeps two IndexedDB databases: an `outbox` that is never dropped, and a disposable `replica`. A command is written with `durability: 'strict'` before the UI says "saved". A Web Locks leader is the only sender. Sending happens on app open, the `online` event, `visibilitychange` and a timer (iOS has no background sync).
+- **Client storage:** each client keeps an outbox that is never dropped and a disposable replica.
+  - **Website:** Dexie 4.4 keeps two IndexedDB databases, `outbox` and `replica`. A command is written with `durability: 'strict'` before the UI says "saved". A Web Locks leader is the only sender across tabs.
+  - **Phone app:** `expo-sqlite` keeps `outbox.db` with `synchronous=FULL` and a disposable `replica-<userId>.db` (§0). A command is written inside `withExclusiveTransactionAsync` before the UI says "saved".
+  - **Sending** happens 300 ms after each command, on resume, on reconnect and every 30 s, and is never gated on `isInternetReachable` (§0). Phones have no dependable background sync, so sending happens while the app is open.
 - **Push:** `POST /api/sync/push` (a fixed route, never a Server Action, because action ids rotate with deploys). Each command runs in its own transaction:
   1. If this command id has been seen, return the stored result.
   2. The command's user must equal the session user. Membership and the permission switch are checked **now**, not as they were when the command was queued.
@@ -215,8 +220,10 @@ The design follows Replicache's published push/pull protocol as a **specificatio
 
 ## 6. Places and community
 
+> **Revised in §0:** the phone app uses MapLibre React Native 11.4, and offline trip packs are phone-only. They are MapLibre offline packs downloaded from a Z/X/Y tile Worker, because MapLibre Native can't build packs from `pmtiles://`. The website shows the street map online only. During development both clients use OpenFreeMap's public tiles; the Protomaps file on R2 and the tile Worker are paid for in phase 6 (§12).
+
 - **Where it lives:** a new platform module, `platform/places`, because Planner, Journal, Polls, Today and Explore all refer to places. Explore owns browsing, the detail sheet, contributing, sharing, rating and reporting. Moderation lives at `app/admin/places`. Features store `place_id … REFERENCES place(id) ON DELETE RESTRICT` and display it through `resolve(ids, viewer)`, which follows merges and applies visibility.
-- **Street map:** MapLibre GL 6.11 (pinned) with a Protomaps world file (about 138 GB, an ODbL Produced Work) copied into R2 each quarter, costing about $1.80/month. Tiles are served from a custom domain on Cloudflare DNS (free-plan requirement). A cache worker is added if cold reads from Singapore stay near 1 s. **Trip packs** cover the world overview, the trip's countries, then its cities at street detail (Tokyo + Kyoto ≈ 28 MB at zoom 14), stored in IndexedDB. Pinning works by long-press or crosshair, and typed decimal/DMS coordinates or "use my location" are the accessible, no-WebGL alternatives. The d3-geo globe stays for choosing a country.
+- **Street map:** MapLibre GL 6.11 (pinned) on the website and MapLibre React Native 11.4 on the phone, with a Protomaps world file (about 138 GB, an ODbL Produced Work) copied into R2 each quarter, costing about $1.80/month. Tiles are served from a custom domain on Cloudflare DNS (free-plan requirement). A cache worker is added if cold reads from Singapore stay near 1 s. **Trip packs** cover the world overview, the trip's countries, then its cities at street detail (Tokyo + Kyoto ≈ 28 MB at zoom 14), stored on the phone as MapLibre offline packs. Pinning works by long-press or crosshair, and typed decimal/DMS coordinates or "use my location" are the accessible, no-WebGL alternatives. The d3-geo globe stays for choosing a country.
 - **Search:** the app's own city and place files first (works offline, including reverse lookup to "near Kyoto, Japan"). After that, a server route `/api/geo/*` with a cache, using Photon and falling back to Geoapify's free tier; the provider is set in config. Nominatim is not used (its policy bans app autocomplete).
 - **Open sources:**
   - Wikidata tourist attractions (CC0, ranked by sitelinks) enter in the first release.
@@ -229,7 +236,7 @@ The design follows Replicache's published push/pull protocol as a **specificatio
   - never in batch, from `after()` or a cron job, and never to list nearby places.
 
   A chosen result may set the pin and prefill an editable name. The row records `coord_source='geocoder'` and the provider, so attribution ("© OpenStreetMap contributors", "Powered by Geoapify") can be shown with it. No OSM ids are stored and nothing is deduplicated against OSM. This follows the OSMF Geocoding Guideline, which allows individual results to be stored alongside other data as long as they are never systematically aggregated. Anything more would put the whole catalogue, community contributions included, under ODbL's share-alike terms. Where this spec and the research file `places/geocoding.md` disagree (it proposed an `after()` step storing OSM references and nearby places), this spec wins. A `CHECK` limits stored place data to CC0, CDLA-P-2.0, Apache-2.0, CC BY 4.0 and our contributor terms. A Licences page ships with the app.
-- **Visibility:** a contribution is a private place in the group's space. Sharing creates a public place in the community space and links the private one to it, so nothing about the group leaks. Shared content publishes immediately. Anyone can report; content is hidden automatically after reports from 2 different groups, pending an admin, who can hide, remove or restore it. **Public `place` rows are never tombstoned.** They carry `status IN ('live','hidden','removed')`: browsing and search show only `live`, while `resolve()` still returns the name and location to anyone holding a reference (an itinerary item, a journal entry) and withholds community tips and photos for places that aren't live. Only contributions (tips, photos, ratings) are tombstoned.
+- **Visibility:** a contribution is a private place in the group's space. Sharing creates a public place in the community space and links the private one to it, so nothing about the group leaks. Shared content passes the pre-publish content filter (§0) and then publishes; photos from new accounts are held for review first. Anyone can report; content is hidden automatically after reports from 2 different groups, pending an admin, who can hide, remove or restore it. **Public `place` rows are never tombstoned.** They carry `status IN ('live','hidden','removed')`: browsing and search show only `live`, while `resolve()` still returns the name and location to anyone holding a reference (an itinerary item, a journal entry) and withholds community tips and photos for places that aren't live. Only contributions (tips, photos, ratings) are tombstoned.
 - **Contributor terms:** facts as CC0; tips and photos as CC BY 4.0. The accepted terms version is recorded. Photos go to R2 via `blob`, with EXIF stripped.
 - **Merging:** one TypeScript log-odds scorer runs on phone and server. It uses distance by category (food 75 m … nature 3 km), name keys (NFKC, fold, transliterate), category compatibility, and matching Wikidata ids. When a person adds a place, the app asks "Is this the same as…?". The only automatic link is private-to-private within a group (same name, within 25 m, same category, undoable). A nightly batch auto-merges open-data pairs at 0.95 or above and sends 0.6–0.95 to an admin. Community places never auto-merge. Merges only move pointers (`merged_into`, `resolved_id`), are logged and can be undone exactly. Chains are compressed when a merge happens: A→B→C rewrites A→C, logged so an unmerge restores A→B. `resolve()` therefore needs a single hop. Because the repo is public, the nightly job reads public rows only and uploads no artifacts.
 - **Commands:** `place.contribute@1`, `place.tag@1`, `place.edit@1`, `place.link@1`, `place.share@1` / `place.unshare@1`, `contribution.add@1` / `contribution.withdraw@1`, `place.rate@1`, `content.report@1`, `moderation.hide|remove|restore@1` (online only), `place.merge@1` / `place.unmerge@1`, and later `rec.dismiss@1`. Switches: `places.contribute`, `places.share`, `places.moderate`.
@@ -237,7 +244,7 @@ The design follows Replicache's published push/pull protocol as a **specificatio
 
 ## 7. Launcher and shell
 
-- The home page at `/` has a group / trip switcher (device-local context), a **Now** strip, and an app grid filtered by the viewer's switches.
+- The launcher is the home screen of the phone app and lives at `/app` on the website (`/` is the public landing page, §0). It has a group / trip switcher (device-local context), a **Now** strip, and an app grid filtered by the viewer's switches.
 - Each app contributes Now cards from `client.tsx`, computed from the local replica so they work offline. Examples: "Day 3 · Kyoto", "Dinner vote closes 18:00", "You owe Mei ¥2,000".
 - The platform adds its own cards for unsent changes, Needs attention, signing in again to send, installing the app, and welcome after an invite.
 - Each tile has a 3-letter code in the boarding-pass style (PLN, MNY, VOT, DTS, JNL, TIX, PAK, MAP, BRF, TDY).
@@ -324,7 +331,7 @@ Each sub-project gets its own spec, then a plan, then small PRs. Nothing moves o
 1. **Platform foundations.**
    - Retire the old data layer **first**: the SQLite backend, `store.ts` / `tripStore.ts` / `pgStore.ts`, and the DDL run at cold start. Otherwise `ensureSchema` would create its own auth tables in the new database. Trip pages show "being rebuilt" until their app lands.
    - Replace the old repo name in the 23 files that still carry it, including every User-Agent contact URL pinned by `scripts/user-agent.test.ts`.
-   - Set up Neon in Singapore and move the functions to `sin1`; rename the Vercel project to `travel-super-app` in the same environment change (`BETTER_AUTH_URL` moves then); buy a domain with Cloudflare DNS.
+   - Set up Neon in Singapore (the Free plan during development, §0) and move the functions to `sin1`; rename the Vercel project to `travel-super-app` in the same environment change (`BETTER_AUTH_URL` moves then). The domain is bought in phase 6 (§15 #1).
    - Drizzle migrations from CI; PGlite plus the real-Postgres job.
    - Identity (including the instance-admin role), members, groups (including personal groups), trips (countries set by hand; deriving them from places arrives with Planner), roles and switches.
    - **Every write is a command handler `(tx, cmd, ctx) => result` from day one**, registered through the same glob as features. Phase 1 exposes the handlers through a thin, online-only `/api/sync/push` with no outbox, idempotency or pull. Phase 2 adds those without touching the handlers. Nothing is written as a one-off API route or Server Action.
@@ -340,7 +347,7 @@ Each sub-project gets its own spec, then a plan, then small PRs. Nothing moves o
    **Gate:** each PR stays within diff scope with its tests green.
 5. **New apps:** Polls, then Dates, built only from the template. **Gate:** no platform edit is needed.
 6. **Release readiness.** Nothing is deployed to the public website or the stores before this phase ends.
-   - **Pay for:** Apple (9/yr), Google Play (5), a domain on Cloudflare DNS, the R2 map file and tile Worker (/mo, enabling offline map packs on the phone), and Neon Launch. Add Vercel Pro only if the launch is public or commercial.
+   - **Pay for:** Apple ($99/yr), Google Play ($25 once), a domain on Cloudflare DNS (about $10/yr), the R2 map file (about $1.80/mo), the tile Worker on Cloudflare Workers ($5/mo; it makes offline map packs possible on the phone), and Neon Launch ($3–6/mo, an estimate). Add Vercel Pro ($20/mo) only if the launch is public or commercial.
    - **iPhone:** development builds, fixes for iOS-specific issues (MLRN #1624, SecureStore, SQLite), then TestFlight.
    - **Android:** Play closed testing with at least 12 testers for 14 days; register the package and signing key for Android developer verification.
    - **Stores:** a compliance pass (privacy labels, Data safety, age rating 13+, the demo account).
@@ -357,7 +364,7 @@ Each sub-project gets its own spec, then a plan, then small PRs. Nothing moves o
 ## 14. Risks
 
 - **The sync core is owner-maintained** (about 2.5k lines plus tests). Mitigated by the Replicache-shaped protocol, randomised replay tests against real Postgres, and one platform interface that PowerSync could later sit behind.
-- **iPhone storage and no background sync.** Handled by the install prompt, flushing in the foreground, and visible unsent counts.
+- **No dependable background sync on phones.** Handled by a durable SQLite outbox, sending on resume, reconnect and a timer, and visible unsent counts. (Safari's storage eviction no longer applies, because phones use the native app, §0.)
 - **Long offline trips versus sessions and deploys.** Handled by 90-day sessions and permanent command handlers.
 - **Drizzle v1 is a release candidate.** Pin the exact version; Kysely is the fallback.
 - **Mainland China reachability.** Install and download everything before entering.

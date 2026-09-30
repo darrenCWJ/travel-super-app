@@ -2,6 +2,8 @@
 
 **Status:** generated 2026-09-24, updated 2026-09-25 for the native mobile app and the website. Sources: the catalogue workflow (four code readers, each checked by a completeness critic, a decision-register reader and a new-app designer), the places design and the native/web design. Companion to [`2026-09-24-travel-super-app-design.md`](2026-09-24-travel-super-app-design.md). Today's functions were read from the code at `main f3c5788` and cite `path:line` there.
 
+**Where this catalogue and §0 of the design spec disagree, §0 wins.** Some rows written before the 2026-09-25 revision still describe a service worker, an install prompt, or IndexedDB on the phone. Phones now use the native app with SQLite, and the website keeps IndexedDB but has no service worker or install flow.
+
 | | Count |
 |---|---|
 | Functions in today's app | 280 (77 keep, 177 change, 26 drop) |
