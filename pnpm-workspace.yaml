@@ -1,7 +1,15 @@
-# pnpm 10 reads every setting from this file; .npmrc is only for registry auth.
-
 packages:
   - apps/*
+  - features
+  - platform
+  - tools/*
+
+# Versions shared by more than one package. A package asks for one with
+# "name": "catalog:". Expo's exact pins (react, react-native) join in PR 4.
+catalog:
+  "@types/node": ^26.2.0
+  typescript: ^7.0.2
+  vitest: ^4.1.11
 
 # Dependency install scripts stay OFF unless a package is listed `true` here.
 # better-sqlite3 ships prebuilt binaries (prebuilds/win32-x64.node, linux-x64)

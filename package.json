@@ -6,6 +6,8 @@
     "node": "24.x"
   },
   "scripts": {
+    "postinstall": "node tools/registry-gen/cli.mjs",
+    "typecheck": "pnpm -r typecheck",
     "dev": "pnpm --filter @tsa/web --fail-if-no-match dev",
     "build": "pnpm --filter @tsa/web --fail-if-no-match build",
     "test": "pnpm -r --stream test",

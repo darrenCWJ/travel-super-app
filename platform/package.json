@@ -1,0 +1,16 @@
+{
+  "name": "@tsa/platform",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    "./_registry/server": "./_registry/server.ts",
+    "./*/core": "./*/core/index.ts",
+    "./*/client": "./*/client/index.ts",
+    "./*/server": "./*/server/index.ts",
+    "./*/db": "./*/db/index.ts",
+    "./*/web": "./*/web/index.ts",
+    "./*/mobile": "./*/mobile/index.ts"
+  }
+}

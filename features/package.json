@@ -1,0 +1,20 @@
+{
+  "name": "@tsa/features",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    "./_registry/manifests": "./_registry/manifests.ts",
+    "./_registry/client": "./_registry/client.ts",
+    "./_registry/server": "./_registry/server.ts",
+    "./_registry/web": "./_registry/web.ts",
+    "./_registry/mobile": "./_registry/mobile.ts",
+    "./*/manifest": "./*/manifest.ts",
+    "./*/core": "./*/core/index.ts",
+    "./*/client": "./*/client/index.ts",
+    "./*/server": "./*/server/index.ts",
+    "./*/web": "./*/web/index.ts",
+    "./*/mobile": "./*/mobile/index.ts"
+  }
+}

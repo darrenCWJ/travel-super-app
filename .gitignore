@@ -38,6 +38,11 @@ pnpm-debug.log*
 /apps/web/data/ingest.log
 /apps/web/data/.ingest.lock
 
+# Written by tools/registry-gen on every install (spec §0 "Registry"); never committed,
+# so parallel feature branches never conflict on it.
+/features/_registry/
+/platform/_registry/
+
 # agent scratch: SDD ledgers, task briefs, review packages, generated schema dumps
 /.superpowers/
 
