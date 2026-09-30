@@ -98,12 +98,12 @@ in SQLite locally — see Deploying.
 ## Getting started
 
 ```bash
-npm install
+pnpm install                   # pnpm 10 is pinned in package.json; `corepack enable` or `npm i -g pnpm@10` gets it
 cp .env.example .env.local     # optional; see Environment variables
-npm run dev                    # every data artifact is committed — this is a working app
-npm test                       # unit tests (Vitest: a node project and a jsdom project)
-npm run test:e2e               # Playwright, against a dev server it starts on :3100
-npx next build                 # what CI runs after the tests
+pnpm dev                       # every data artifact is committed — this is a working app
+pnpm test                      # unit tests (Vitest: a node project and a jsdom project)
+pnpm test:e2e                  # Playwright, against a dev server it starts on :3100
+pnpm build                     # what CI runs after the tests
 ```
 
 `.env.local` is optional locally: with no `BETTER_AUTH_SECRET` the app runs in
