@@ -1,5 +1,5 @@
 {
- "generatedAt": "2026-09-28T16:48:50.382Z",
+ "generatedAt": "2026-09-30T14:58:45.873Z",
  "source": "Public domain (OurAirports, regenerated nightly)",
  "airports": [
   {
@@ -14238,8 +14238,8 @@
    "name": "Tiksi Airport",
    "municipality": "Tiksi",
    "country": "RU",
-   "lat": 71.697700500488,
-   "lon": 128.90299987793,
+   "lat": 71.697701,
+   "lon": 128.903,
    "size": "medium"
   },
   {
