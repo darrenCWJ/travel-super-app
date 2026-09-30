@@ -77,6 +77,27 @@ describe("buildRegistry", () => {
     touch("features/Money/manifest.ts");
     expect(() => buildRegistry(root)).toThrow('"Money" is not a valid module name');
   });
+
+  it("refuses a name with a trailing dash", () => {
+    touch("features/money-/manifest.ts");
+    expect(() => buildRegistry(root)).toThrow('"money-" is not a valid module name');
+  });
+
+  it("refuses a name with a doubled dash", () => {
+    touch("features/a--b/manifest.ts");
+    expect(() => buildRegistry(root)).toThrow('"a--b" is not a valid module name');
+  });
+
+  it("refuses a name that becomes a reserved word", () => {
+    touch("features/package/manifest.ts");
+    expect(() => buildRegistry(root)).toThrow('"package" becomes the reserved word package');
+  });
+
+  it("refuses two names that become the same identifier", () => {
+    touch("features/v-2/manifest.ts");
+    touch("features/v2/manifest.ts");
+    expect(() => buildRegistry(root)).toThrow('"v-2" and "v2" both become the identifier v2');
+  });
 });
 
 describe("writeRegistry", () => {
