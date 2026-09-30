@@ -22,6 +22,7 @@ const FIXTURE: Record<string, string> = {
   "features/money/core/bad-cross.ts": 'import { p } from "../../polls/core/p";\nexport const x = p;\n',
   "features/money/core/bad-unexported.ts": 'import { table } from "@fx/platform/sync/db";\nexport const x = table;\n',
   "features/money/core/load.test.ts": "export const load = (name: string) => import(name);\n",
+  "features/money/tests/helper.ts": "export const load = (name: string) => import(name);\n", // tests/ is the test part, whatever the file is called
   "features/money/core/bad-dynamic.ts": "export const load = (name: string) => import(name);\n",
   "features/money/core/bad-builtin.ts": 'const fs = require("node:fs");\nexport const x = fs;\n',
   "features/money/core/bad-equals.ts": 'import server = require("../server/s");\nexport const x = server;\n',
@@ -54,6 +55,20 @@ afterAll(() => {
   rmSync(fixture, { recursive: true, force: true });
 });
 
+/** Write `files` into a fresh temp repo, run `check` against its root, and always delete it. */
+function withRepo(files: Record<string, string>, check: (root: string) => void): void {
+  const root = mkdtempSync(join(tmpdir(), "boundaries-"));
+  try {
+    for (const [rel, content] of Object.entries(files)) {
+      mkdirSync(dirname(join(root, rel)), { recursive: true });
+      writeFileSync(join(root, rel), content);
+    }
+    check(root);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+}
+
 describe("scanRepo on the fixture repo", () => {
   it("reports exactly one violation per bad file, and nothing for the good ones", () => {
     const found = scanRepo({ root: fixture }).violations.map((v) => [v.file, v.line, v.reason]);
@@ -81,7 +96,43 @@ describe("scanRepo coverage", () => {
     expect(scannedFiles).toContain("apps/mobile/src/index.tsx");
     expect(scannedFiles).not.toContain("features/package.json");
     expect(scannedFiles).toContain("features/_registry/server.ts");
-    expect(scannedFiles).toHaveLength(21);
+    expect(scannedFiles).toContain("features/money/tests/helper.ts");
+    expect(scannedFiles).toHaveLength(22);
+  });
+});
+
+// Each of these builds its own small repo: the one above is shared and its violation list is exact.
+describe("scanRepo edge cases", () => {
+  it("sorts violations by code unit, so the report reads the same on every machine", () => {
+    const bad = 'import "react";\n';
+    withRepo({ "features/money/core/alpha.ts": bad, "features/money/core/Zeta.ts": bad }, (root) => {
+      const files = scanRepo({ root }).violations.map((v) => v.file);
+      // localeCompare would put alpha.ts first.
+      expect(files).toEqual(["features/money/core/Zeta.ts", "features/money/core/alpha.ts"]);
+    });
+  });
+
+  it("judges a registry import by the registry file's kind, once the resolver has found the file", () => {
+    const registry = {
+      "features/_registry/server.ts": "export const serverParts = {};\n",
+      "features/_registry/web.ts": "export const webParts = {};\n",
+    };
+    const reads = (up: string) =>
+      `import { serverParts } from "${up}features/_registry/server";\nimport { webParts } from "${up}features/_registry/web";\nexport default [serverParts, webParts];\n`;
+    withRepo({ ...registry, "apps/web/page.tsx": reads("../../"), "apps/mobile/src/index.tsx": reads("../../../") }, (root) => {
+      const found = scanRepo({ root }).violations.map((v) => [v.file, v.line, v.reason]);
+      expect(found).toEqual([
+        ["apps/mobile/src/index.tsx", 1, "apps/mobile may not import the server registry"],
+        ["apps/mobile/src/index.tsx", 2, "apps/mobile may not import the web registry"],
+      ]);
+    });
+  });
+
+  it("reads a package.json saved with a byte-order mark", () => {
+    const manifest = `\uFEFF${JSON.stringify({ name: "@fx/features", private: true })}`;
+    withRepo({ "features/package.json": manifest, "features/money/core/ok.ts": "export const ok = 1;\n" }, (root) => {
+      expect(scanRepo({ root }).violations).toEqual([]);
+    });
   });
 });
 

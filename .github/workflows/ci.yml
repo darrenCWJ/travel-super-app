@@ -25,9 +25,12 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      # tsc (and, in `e2e`, playwright) is a devDependency of @tsa/web, so its
-      # bin does not resolve at the workspace root: run it through --filter.
-      # `pnpm test` and `pnpm build` below are root scripts that delegate.
+      # `pnpm typecheck` runs the `typecheck` script of every workspace package
+      # (`pnpm -r`), so a new package joins the gate by defining one. `pnpm
+      # build` below type-checks the web app a second time, inside `next build`.
+      # `pnpm test` and `pnpm build` are root scripts that delegate as well.
+      # Playwright (in `e2e`) is a devDependency of @tsa/web, so its bin does
+      # not resolve at the workspace root: `e2e` runs it through --filter.
       # Every --filter in this file carries --fail-if-no-match: pnpm exits 0
       # when a filter matches no package ("No projects matched the filters"),
       # so a rename or a typo would turn the step into a silent no-op.

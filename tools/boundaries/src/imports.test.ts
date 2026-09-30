@@ -18,6 +18,9 @@ const SOURCE = [
   'const ctx = require.context("./dir", true);', //    14
   "const el = <div>{a}</div>;", //                     15
   "export const local = 1;", //                        16
+  'type Imp = import("../../polls/core/p").Foo;', //   17
+  'type Qry = typeof import("./query");', //           18
+  'declare function f(a: Array<import("./nested").N>): void;', // 19
 ].join("\n");
 
 describe("collectImports", () => {
@@ -68,8 +71,14 @@ describe("collectImports", () => {
     expect(by("./dir", "require-context")[0].line).toBe(14);
   });
 
+  it("reads a type-position import(\"x\").T as a type-only import, wherever the type appears", () => {
+    expect(by("../../polls/core/p")).toEqual([{ specifier: "../../polls/core/p", kind: "import", typeOnly: true, line: 17 }]);
+    expect(by("./query")).toEqual([{ specifier: "./query", kind: "import", typeOnly: true, line: 18 }]);
+    expect(by("./nested")).toEqual([{ specifier: "./nested", kind: "import", typeOnly: true, line: 19 }]);
+  });
+
   it("counts every reference exactly once", () => {
-    expect(imports).toHaveLength(14);
+    expect(imports).toHaveLength(17);
   });
 
   it("returns parse errors instead of throwing", () => {

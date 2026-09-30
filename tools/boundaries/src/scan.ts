@@ -83,11 +83,15 @@ export function scanRepo(options: ScanOptions): ScanResult {
       }
     }
   }
-  violations.sort((a, b) => a.file.localeCompare(b.file) || a.line - b.line);
+  // Code-unit order, like scannedFiles: localeCompare would sort differently on another machine's locale.
+  violations.sort((a, b) => (a.file < b.file ? -1 : a.file > b.file ? 1 : a.line - b.line));
   return { violations, scannedFiles: scannedFiles.sort() };
 
   function judge(ref: ImportRef, zone: Zone, file: string): string | null {
-    if (ref.kind === "dynamic-unknown") return TEST_FILE.test(file) ? null : "an import or require with a computed specifier cannot be checked";
+    if (ref.kind === "dynamic-unknown") {
+      // Test files and the tests/ and e2e/ folders (zone "test") may compute a specifier.
+      return TEST_FILE.test(file) || zone.part === "test" ? null : "an import or require with a computed specifier cannot be checked";
+    }
     if (ref.kind === "require-context") return "require.context bypasses the generated registry";
     const specifier = ref.specifier!;
     const target = resolveTarget(specifier, file);
@@ -121,7 +125,8 @@ function workspacePackageNames(root: string): Set<string> {
     }
   }
   for (const manifest of manifests) {
-    if (existsSync(manifest)) names.add(JSON.parse(readFileSync(manifest, "utf8")).name);
+    // A package.json saved with a byte-order mark would otherwise crash JSON.parse before any file is scanned.
+    if (existsSync(manifest)) names.add(JSON.parse(readFileSync(manifest, "utf8").replace(/^\uFEFF/, "")).name);
   }
   return names;
 }
