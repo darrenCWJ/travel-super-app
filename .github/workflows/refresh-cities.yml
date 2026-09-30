@@ -289,10 +289,9 @@ jobs:
       # would be a list that silently stops being complete the day someone
       # adds a fourth. This is the web package's share of ci.yml's gate
       # (`pnpm test`), which is the point — see the header. ci.yml's other
-      # half, `pnpm --filter @tsa/web --fail-if-no-match exec tsc --noEmit`,
-      # is deliberately not repeated: these scripts write JSON only, so every
-      # TypeScript file in the tree is byte-identical to the commit CI already
-      # type-checked.
+      # half, `pnpm typecheck`, is deliberately not repeated: these scripts
+      # write JSON only, so every TypeScript file in the tree is
+      # byte-identical to the commit CI already type-checked.
       #
       # --fail-if-no-match is load-bearing: pnpm exits 0 when a filter matches
       # no package, so without it a renamed @tsa/web would leave this step

@@ -42,10 +42,19 @@ const PART_RULES: Record<Exclude<Part, "test" | "registry" | "manifest">, Part[]
   mobile: ["core", "client", "mobile"],
 };
 
-/** Parts each app may import directly (route files are one-line re-exports; spec §0). */
+/** Parts each app may import directly (route files are one-line re-exports; spec §0). The registry is judged by kind, below. */
 const APP_PARTS: Record<string, Part[]> = {
-  web: ["core", "client", "server", "web", "registry"],
-  mobile: ["core", "client", "mobile", "registry"],
+  web: ["core", "client", "server", "web"],
+  mobile: ["core", "client", "mobile"],
+};
+
+/**
+ * Generated registry files each app may import, by kind (the file's base name). Both apps are
+ * composition roots, but each reads only its own zone's files: the phone has no server registry.
+ */
+const APP_REGISTRIES: Record<string, string[]> = {
+  web: ["manifests", "client", "server", "web"],
+  mobile: ["manifests", "client", "mobile"],
 };
 
 /** Why `from` may not import `to`, or null when it may. */
@@ -68,7 +77,7 @@ function checkPackage(from: Zone, to: Extract<Target, { kind: "package" | "built
 function checkZone(from: Zone, to: Zone): string | null {
   const sameOwner = from.layer === to.layer && from.owner === to.owner;
   if (to.layer === "app") return from.layer === "app" && sameOwner ? null : `nothing imports into apps/${to.owner}`;
-  if (to.part === "registry") return from.layer === "app" ? null : "only the apps import the generated registry";
+  if (to.part === "registry") return checkRegistry(from, to);
   // Generated code: it imports every feature's parts by design, and only the apps import it.
   if (from.part === "registry") return null;
 
@@ -91,6 +100,13 @@ function checkZone(from: Zone, to: Zone): string | null {
     return "only a module's own server and db code import its tables";
   }
   return null;
+}
+
+function checkRegistry(from: Zone, to: Zone): string | null {
+  if (from.layer !== "app") return "only the apps import the generated registry";
+  const kind = to.kind ?? "unknown";
+  const allowed = APP_REGISTRIES[from.owner] ?? [];
+  return allowed.includes(kind) ? null : `apps/${from.owner} may not import the ${kind} registry`;
 }
 
 function describe(zone: Zone): string {

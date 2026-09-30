@@ -2,7 +2,7 @@ import { parseSync } from "oxc-parser";
 
 /** How a file refers to another module. */
 export type ImportKind =
-  | "import" // import … from "x" / import "x"
+  | "import" // import … from "x" / import "x" / a type-position import("x").T (always typeOnly)
   | "export" // export … from "x" / export * from "x"
   | "dynamic" // import("x")
   | "require" // require("x")
@@ -22,7 +22,11 @@ export interface ParsedImports {
   errors: string[];
 }
 
-/** Every module reference in one file, including the forms oxc's module record does not report. */
+/**
+ * Every module reference in one file. oxc's module record supplies static imports, re-exports and
+ * import("x") calls; require("x"), `import x = require("x")`, require.context("./dir") and the
+ * type-position `import("x").T` are not in it, so they are found by walking the AST.
+ */
 export function collectImports(filename: string, source: string): ParsedImports {
   const result = parseSync(filename, source);
   const lineOf = lineIndex(source);
@@ -56,6 +60,10 @@ export function collectImports(filename: string, source: string): ParsedImports 
         typeOnly: node.importKind === "type",
         line: lineOf(node.start),
       });
+    }
+    // `type T = import("x").Y` and `typeof import("x")`: a TS import type, not a call, so the module record misses it.
+    if (node.type === "TSImportType" && node.source?.type === "Literal" && typeof node.source.value === "string") {
+      imports.push({ specifier: node.source.value, kind: "import", typeOnly: true, line: lineOf(node.start) });
     }
     if (node.type !== "CallExpression") return;
     const callee = node.callee;
