@@ -99,7 +99,7 @@ in SQLite locally — see Deploying.
 
 ```bash
 pnpm install                   # pnpm 10 is pinned in package.json; `corepack enable` or `npm i -g pnpm@10` gets it
-cp .env.example .env.local     # optional; see Environment variables
+cp apps/web/.env.example apps/web/.env.local   # optional; see Environment variables
 pnpm dev                       # every data artifact is committed — this is a working app
 pnpm test                      # unit tests (Vitest: a node project and a jsdom project)
 pnpm test:e2e                  # Playwright, against a dev server it starts on :3100
@@ -115,7 +115,7 @@ in to exercise accounts and the wall.
 Every artifact the app reads is committed, so a clone runs without any ingest.
 Three workflows keep them fresh — each commits only when its artifact changed,
 and a commit deploys itself; the fourth, CI, runs on every push and pull
-request.
+request. Script and data paths below are relative to `apps/web`.
 
 | Workflow | When | Runs | Source (licence) |
 |---|---|---|---|
@@ -127,30 +127,35 @@ request.
 The province, projection, globe and world topologies are built from Natural
 Earth (public domain) by `scripts/build-*.mjs` when the geometry changes, and
 the China catalog (`data/catalog.json`) by hand:
-`node scripts/ingest-destinations.mjs` (~5–10 min), commit, redeploy. GeoNames
-data is CC BY 4.0 — the credit renders on every surface that shows a city name,
-and `lib/contracts.test.ts` fails the build if it ever does not.
+`cd apps/web; node scripts/ingest-destinations.mjs` (~5–10 min), commit,
+redeploy. GeoNames data is CC BY 4.0 — the credit renders on every surface
+that shows a city name, and `lib/contracts.test.ts` fails the build if it ever
+does not.
 
 ## Project layout
 
 ```
-app/                  /plan wizard, / trips home, /trip/[id], /b/[code] briefing, /login + /signup, /account, /api routes
-components/
-  auth/  briefing/  home/  plan/  shell/  trip/
-  map/                the globe, the country map (CountryLevel + UnitsLayer/AirportLayer/MarkerLayer, countryView, markerGeometry, markerLayout, useMarkerSelection), the province level, hooks
-lib/                  pure planning logic, shared types, clients (+ tests beside each module)
-  data/               the 16 curated destinations
-  server/             airports, catalog, cityIndex (server-only artifacts); auth, session, stores (sqlite + postgres), schemas
-  contracts.test.ts   whole-tree contracts: one nav, one credit per surface, no second fetch of trip data
-scripts/              ingest-*.mjs and enrich-cities.mjs (entries) with their modules under scripts/{climate,cities,enrich,country-facts}/; build-*.mjs (geometry); sample-climate-anchors.mjs
-data/                 committed artifacts and their reports (airports, catalog, cities-index, country-facts, climate anchors)
-public/               cities/<CC>.json, provinces/<CC>.json, climate/<CC>.json (246 each), country-projections.json, world-globe.json
-e2e/                  Playwright specs and the saved session (auth.setup.ts)
-test/                 shared test harnesses that must live outside the contract-scanned roots
+package.json            the workspace root: pins pnpm 10, and its scripts delegate to @tsa/web
+pnpm-workspace.yaml     the workspace (apps/*) and every pnpm setting
+apps/web/               the Next.js app, package @tsa/web; everything below is relative to it
+  app/                  /plan wizard, / trips home, /trip/[id], /b/[code] briefing, /login + /signup, /account, /api routes
+  components/
+    auth/  briefing/  home/  plan/  shell/  trip/
+    map/                the globe, the country map (CountryLevel + UnitsLayer/AirportLayer/MarkerLayer, countryView, markerGeometry, markerLayout, useMarkerSelection), the province level, hooks
+  lib/                  pure planning logic, shared types, clients (+ tests beside each module)
+    data/               the 16 curated destinations
+    server/             airports, catalog, cityIndex (server-only artifacts); auth, session, stores (sqlite + postgres), schemas
+    contracts.test.ts   whole-tree contracts: one nav, one credit per surface, no second fetch of trip data
+  scripts/              ingest-*.mjs and enrich-cities.mjs (entries) with their modules under scripts/{climate,cities,enrich,country-facts}/; build-*.mjs (geometry); sample-climate-anchors.mjs
+  data/                 committed artifacts and their reports (airports, catalog, cities-index, country-facts, climate anchors)
+  public/               cities/<CC>.json, provinces/<CC>.json, climate/<CC>.json (246 each), country-projections.json, world-globe.json
+  e2e/                  Playwright specs and the saved session (auth.setup.ts)
+  test/                 shared test harnesses that must live outside the contract-scanned roots
 docs/
-  PLAN.md             Where things stand and what is open
-  RESEARCH.md         Data-source research (APIs, open data, scraping legality), August 2026
-  superpowers/        specs (the design record), plans, handoffs
+  PLAN.md               Where things stand and what is open
+  RESEARCH.md           Data-source research (APIs, open data, scraping legality), August 2026
+  superpowers/          specs (the design record), plans, handoffs
+.github/                CI, and the scheduled data-refresh workflows
 ```
 
 ## How "many people can join" works
@@ -168,9 +173,7 @@ resets are admin-assisted (`ADMIN_USER_IDS`) — no email service needed.
 
 ## Deploying
 
-Deployed on Vercel at <https://china-itinerary-planner.vercel.app>. The
-Vercel project's install command pulls the latest `main` tarball from GitHub,
-so **any redeploy ships the newest committed code**.
+Deployed on Vercel at <https://china-itinerary-planner.vercel.app>.
 
 Storage picks its backend from the environment (`lib/server/store.ts`):
 
@@ -222,4 +225,5 @@ deployment fail to start (see `instrumentation.ts`) rather than quietly
 reopening the site.
 
 The catalog refresh endpoint is local-only (serverless filesystems are
-read-only): rerun `node scripts/ingest-destinations.mjs`, commit, redeploy.
+read-only): rerun `cd apps/web; node scripts/ingest-destinations.mjs`, commit,
+redeploy.

@@ -1,5 +1,7 @@
 # pnpm 10 reads every setting from this file; .npmrc is only for registry auth.
-# `packages:` arrives when the app moves to apps/web (phase 0, PR 2).
+
+packages:
+  - apps/*
 
 # Dependency install scripts stay OFF unless a package is listed `true` here.
 # better-sqlite3 ships prebuilt binaries (prebuilds/win32-x64.node, linux-x64)
