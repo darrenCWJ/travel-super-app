@@ -6,9 +6,9 @@
     "node": "24.x"
   },
   "scripts": {
-    "dev": "pnpm --filter @tsa/web dev",
-    "build": "pnpm --filter @tsa/web build",
+    "dev": "pnpm --filter @tsa/web --fail-if-no-match dev",
+    "build": "pnpm --filter @tsa/web --fail-if-no-match build",
     "test": "pnpm -r --stream test",
-    "test:e2e": "pnpm --filter @tsa/web test:e2e"
+    "test:e2e": "pnpm --filter @tsa/web --fail-if-no-match test:e2e"
   }
 }

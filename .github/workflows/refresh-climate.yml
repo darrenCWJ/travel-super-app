@@ -106,8 +106,9 @@
 # that token for the `git push` below — so ci.yml never runs on this
 # workflow's own commit, while Vercel's git integration deploys it
 # regardless. That is why "Verify the artifacts against the repo's own
-# tests" runs the full `pnpm test` before the commit step: it is the only
-# gate standing between a bad build and production.
+# tests" runs the web app's full suite before the commit step, as
+# `pnpm --filter @tsa/web --fail-if-no-match test`: it is the only gate
+# standing between a bad build and production.
 name: Refresh climate
 
 on:
@@ -190,12 +191,16 @@ jobs:
       # refresh-cities.yml's identically named step: ci.yml never runs on
       # this workflow's own commit (see header), so this is the only gate
       # standing between a bad build and a production deploy.
-      # `pnpm --filter @tsa/web exec tsc --noEmit` is deliberately not
-      # repeated: this script writes JSON only, so every TypeScript file in
-      # the tree is byte-identical to what the push that put this commit on
-      # the dispatch branch already type-checked.
+      # `pnpm --filter @tsa/web --fail-if-no-match exec tsc --noEmit` is
+      # deliberately not repeated: this script writes JSON only, so every
+      # TypeScript file in the tree is byte-identical to what the push that
+      # put this commit on the dispatch branch already type-checked.
+      #
+      # --fail-if-no-match is load-bearing: pnpm exits 0 when a filter matches
+      # no package, so without it a renamed @tsa/web would leave this step
+      # running nothing, green, and the commit below unguarded.
       - name: Verify the artifacts against the repo's own tests
-        run: pnpm --filter @tsa/web test
+        run: pnpm --filter @tsa/web --fail-if-no-match test
 
       - name: Commit if the climate normals changed
         run: |

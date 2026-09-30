@@ -28,7 +28,10 @@ jobs:
       # tsc (and, in `e2e`, playwright) is a devDependency of @tsa/web, so its
       # bin does not resolve at the workspace root: run it through --filter.
       # `pnpm test` and `pnpm build` below are root scripts that delegate.
-      - run: pnpm --filter @tsa/web exec tsc --noEmit
+      # Every --filter in this file carries --fail-if-no-match: pnpm exits 0
+      # when a filter matches no package ("No projects matched the filters"),
+      # so a rename or a typo would turn the step into a silent no-op.
+      - run: pnpm --filter @tsa/web --fail-if-no-match exec tsc --noEmit
       - run: pnpm test
       # The `server-only` guard on apps/web/lib/server/airports.ts, cityIndex.ts,
       # catalog.ts and cityEnrichment.ts is only guaranteed to fire in a
@@ -77,14 +80,10 @@ jobs:
       # `--with-deps` pulls the system libraries the browser needs on
       # ubuntu-latest. Still run on a cache hit, because the cache restores the
       # browser binaries and not the apt packages beside them.
-      - run: pnpm --filter @tsa/web exec playwright install --with-deps chromium
-      - run: pnpm --filter @tsa/web exec playwright test
+      - run: pnpm --filter @tsa/web --fail-if-no-match exec playwright install --with-deps chromium
+      - run: pnpm --filter @tsa/web --fail-if-no-match exec playwright test
         env:
-          # Not a secret. It signs sessions in a throwaway SQLite file that
-          # exists for the length of one job, and the same value is committed
-          # in apps/web/playwright.config.ts. It has to be >= 24 chars and
-          # must not be one of the placeholders apps/web/lib/authSecret.ts
-          # rejects.
+          # e2e auth secret: committed fixture in apps/web/playwright.config.ts
           CI: "true"
       - uses: actions/upload-artifact@v4
         if: ${{ !cancelled() }}
