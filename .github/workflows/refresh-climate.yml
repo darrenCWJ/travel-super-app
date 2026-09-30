@@ -77,11 +77,11 @@
 # per-repository cache limit, and a dispatch happens roughly once a decade —
 # there is no "usually warm" case to optimise for, so every run downloads
 # everything regardless and there would be nothing left to restore between
-# runs. (`cache: npm` below is a different, unrelated mechanism — it caches
-# node_modules, megabytes not gigabytes, the same way ci.yml uses it.)
+# runs. (`cache: pnpm` below is a different, unrelated mechanism — it caches
+# the pnpm store, megabytes not gigabytes, the same way ci.yml uses it.)
 #
-# Needs `npm ci`, unlike refresh-airports.yml and refresh-cities.yml's ingest
-# jobs: scripts/ingest-climate.mjs (through scripts/climate/acquire.mjs)
+# Needs `pnpm install`, unlike refresh-airports.yml and refresh-cities.yml's
+# ingest jobs: scripts/ingest-climate.mjs (through scripts/climate/acquire.mjs)
 # imports `geotiff` to read the rasters, so this job runs on a real install
 # rather than Node built-ins alone. The same install also provides vitest for
 # the verify step below.
@@ -102,7 +102,7 @@
 # that token for the `git push` below — so ci.yml never runs on this
 # workflow's own commit, while Vercel's git integration deploys it
 # regardless. That is why "Verify the artifacts against the repo's own
-# tests" runs the full `npm test` before the commit step: it is the only
+# tests" runs the full `pnpm test` before the commit step: it is the only
 # gate standing between a bad build and production.
 name: Refresh climate
 
@@ -137,8 +137,8 @@ jobs:
     # Expected wall clock: ~26 min sampling (measured, 1,557 s, everything
     # cached) + ~37 min for the cold 10.65 GB download (measured at 4.81 MB/s
     # from the author's host — a GitHub runner may be faster or slower) +
-    # ~3 min more for `npm ci` and `npm test` ≈ 66 min. 150 is roughly double
-    # that: slack for a slower runner or host, while a genuinely stalled
+    # ~3 min more for `pnpm install` and `pnpm test` ≈ 66 min. 150 is roughly
+    # double that: slack for a slower runner or host, while a genuinely stalled
     # download still goes red well short of the 6-hour default.
     timeout-minutes: 150
     env:
@@ -149,10 +149,12 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
+      - uses: pnpm/action-setup@v6
+
       - uses: actions/setup-node@v5
         with:
           node-version: 24
-          cache: npm
+          cache: pnpm
 
       # /mnt is the runner's larger scratch volume — see "Disk" in the
       # header. Neither this directory nor write access to it exists by
@@ -174,7 +176,7 @@ jobs:
             exit 1
           fi
 
-      - run: npm ci
+      - run: pnpm install --frozen-lockfile
 
       - name: Ingest climate normals
         run: node scripts/ingest-climate.mjs
@@ -182,13 +184,13 @@ jobs:
       # The whole suite, not a hand-picked subset — same reasoning as
       # refresh-cities.yml's identically named step: ci.yml never runs on
       # this workflow's own commit (see header), so this is the only gate
-      # standing between a bad build and a production deploy. `npx tsc
+      # standing between a bad build and a production deploy. `pnpm exec tsc
       # --noEmit` is deliberately not repeated: this script writes JSON
       # only, so every TypeScript file in the tree is byte-identical to what
       # the push that put this commit on the dispatch branch already
       # type-checked.
       - name: Verify the artifacts against the repo's own tests
-        run: npm test
+        run: pnpm test
 
       - name: Commit if the climate normals changed
         run: |

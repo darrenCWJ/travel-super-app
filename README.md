@@ -122,7 +122,7 @@ request.
 | Refresh airports | daily, 08:23 UTC | `scripts/ingest-airports.mjs` | OurAirports (public domain) |
 | Refresh cities | daily, 08:53 UTC, three jobs | `ingest-cities.mjs` → `enrich-cities.mjs` → `ingest-country-facts.mjs` | GeoNames cities500 (CC BY 4.0) · Wikidata (CC0) + Wikipedia summaries (CC BY-SA) |
 | Refresh climate | by hand (`workflow_dispatch`) | `scripts/ingest-climate.mjs` | CHELSA V2.1 1981–2010 (CC0), ~10.7 GB of rasters |
-| CI | every push and PR | `npm test`, `next build`, Playwright | — |
+| CI | every push and PR | `pnpm test`, `next build`, Playwright | — |
 
 The province, projection, globe and world topologies are built from Natural
 Earth (public domain) by `scripts/build-*.mjs` when the geometry changes, and
