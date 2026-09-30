@@ -127,7 +127,12 @@ jobs:
           # drift. enrich-cities.mjs is node:fs|path|url only and doesn't need it
           # for that reason, but runs under the same setup-node step.
           node-version: 24
-      # No install here any more, and no package cache: both ingest scripts run
+          # This job installs nothing, so pnpm is not on PATH. Without this,
+          # setup-node v5 sees package.json's packageManager and tries to
+          # restore a pnpm cache, which fails before the job starts.
+          package-manager-cache: false
+      # No install here any more, and no package cache (`package-manager-cache:
+      # false` above stops setup-node starting one): both ingest scripts run
       # on Node built-ins alone, so this job needs no node_modules and now
       # starts ingesting immediately. That does drop the old fail-fast on a
       # broken lockfile — accepted, because ci.yml runs
@@ -183,6 +188,10 @@ jobs:
           # node:fs|path|url only, but pinned to the same 24 the other jobs use
           # rather than inheriting whatever the runner image ships.
           node-version: 24
+          # This job installs nothing, so pnpm is not on PATH. Without this,
+          # setup-node v5 sees package.json's packageManager and tries to
+          # restore a pnpm cache, which fails before the job starts.
+          package-manager-cache: false
 
       # A third, independent source (Wikidata), still covered by "Verify the
       # artifacts" in `commit` rather than sailing past it. `assertFactsSane`
