@@ -46,6 +46,10 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: 24
+          # This job installs nothing, so pnpm is not on PATH. Without this,
+          # setup-node v5 sees package.json's packageManager and tries to
+          # restore a pnpm cache, which fails before the job starts.
+          package-manager-cache: false
 
       - name: Ingest airports
         run: node scripts/ingest-airports.mjs
