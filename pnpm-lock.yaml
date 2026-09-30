@@ -4,6 +4,18 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+catalogs:
+  default:
+    '@types/node':
+      specifier: ^26.2.0
+      version: 26.2.0
+    typescript:
+      specifier: ^7.0.2
+      version: 7.0.2
+    vitest:
+      specifier: ^4.1.11
+      version: 4.1.11
+
 importers:
 
   .: {}
@@ -69,7 +81,7 @@ importers:
         specifier: ^7946.0.16
         version: 7946.0.16
       '@types/node':
-        specifier: ^26.2.0
+        specifier: 'catalog:'
         version: 26.2.0
       '@types/pg':
         specifier: ^8.23.1
@@ -105,10 +117,26 @@ importers:
         specifier: ^3.0.3
         version: 3.0.3
       typescript:
-        specifier: ^7.0.2
+        specifier: 'catalog:'
         version: 7.0.2
       vitest:
-        specifier: ^4.1.11
+        specifier: 'catalog:'
+        version: 4.1.11(@types/node@26.2.0)(jsdom@29.1.1(@noble/hashes@2.3.0))(vite@8.2.2(@types/node@26.2.0)(jiti@2.7.0))
+
+  features: {}
+
+  platform: {}
+
+  tools/registry-gen:
+    devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 26.2.0
+      typescript:
+        specifier: 'catalog:'
+        version: 7.0.2
+      vitest:
+        specifier: 'catalog:'
         version: 4.1.11(@types/node@26.2.0)(jsdom@29.1.1(@noble/hashes@2.3.0))(vite@8.2.2(@types/node@26.2.0)(jiti@2.7.0))
 
 packages:
