@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync }
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { buildRegistry, identifier, writeRegistry } from "./generate.mjs";
+import { buildRegistry, FEATURE_PARTS, identifier, PLATFORM_PARTS, writeRegistry } from "./generate.mjs";
 
 let root: string;
 const touch = (rel: string, content = "export {};\n") => {
@@ -71,6 +71,39 @@ describe("buildRegistry", () => {
   it("refuses a feature folder without a manifest", () => {
     touch("features/money/server/index.ts");
     expect(() => buildRegistry(root)).toThrow("features/money has no manifest.ts");
+  });
+
+  // A part reaches the registry through <part>/index.ts and nothing else. A part folder without one
+  // used to be left out without a word, and its screens were simply not in the app.
+  it.each(FEATURE_PARTS)("refuses a feature's %s folder whose index is not index.ts", (part) => {
+    touch("features/money/manifest.ts");
+    touch(`features/money/${part}/index.tsx`);
+    expect(() => buildRegistry(root)).toThrow(
+      `features/money/${part} has no index.ts — a part is registered through its index.ts, which the exports map in features/package.json points at`,
+    );
+  });
+
+  it("refuses a feature part folder that has files but no index at all", () => {
+    touch("features/money/manifest.ts");
+    touch("features/money/mobile/Home.tsx");
+    expect(() => buildRegistry(root)).toThrow("features/money/mobile has no index.ts");
+  });
+
+  it.each(PLATFORM_PARTS)("refuses a platform module's %s folder without an index.ts", (part) => {
+    touch(`platform/sync/${part}/commands.ts`);
+    expect(() => buildRegistry(root)).toThrow(
+      `platform/sync/${part} has no index.ts — a part is registered through its index.ts, which the exports map in platform/package.json points at`,
+    );
+  });
+
+  it("leaves the folders that are not registry parts alone", () => {
+    touch("features/money/manifest.ts");
+    touch("features/money/core/split.ts");
+    touch("features/money/db/schema.ts");
+    touch("features/money/tests/fixtures.ts");
+    touch("platform/sync/core/protocol.ts");
+    touch("platform/sync/client/useSync.ts");
+    expect(buildRegistry(root)["features/_registry/manifests.ts"]).toContain("import money from '../money/manifest';");
   });
 
   it("refuses a module name that cannot become an import", () => {
