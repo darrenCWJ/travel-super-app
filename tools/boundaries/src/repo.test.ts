@@ -24,7 +24,8 @@ const UNSCANNED_ON_PURPOSE = [
 ];
 
 describe("this repo's imports", () => {
-  const { violations, scannedFiles } = scanRepo({ root, tsconfigs: TSCONFIGS });
+  // Every package is installed here, so a value import that resolves nowhere is a violation.
+  const { violations, scannedFiles } = scanRepo({ root, tsconfigs: TSCONFIGS, refuseUnresolved: true });
 
   // A clean result only means something if the scan reached the code: check
   // for files it must see, and a floor well under today's count.
