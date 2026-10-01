@@ -48,8 +48,9 @@ interface PackageRule {
 }
 
 /**
- * Packages each part may not use (spec §0's "Never" column). Tests and registries have no entry:
- * the one package they may not use is react-native-web, which checkPackage refuses for everyone.
+ * Packages each part may not use (spec §0's "Never" column). Registries have no entry, and a test
+ * never gets as far as this table: the one package either may not use is react-native-web, which
+ * checkPackage refuses for everyone.
  */
 const PACKAGE_RULES: Partial<Record<Part | "app:web" | "app:mobile", PackageRule>> = {
   core: { banned: [isReact, isReactDom, isReactNative, isExpo, isNext, isDrizzle], builtins: false },
@@ -98,6 +99,8 @@ function checkPackage(from: Zone, to: Extract<Target, { kind: "package" | "built
   // First, because it holds for everyone: for tests and registries, which have no other package
   // rule, and on the mobile side, where the rest of the React Native family is allowed.
   if (to.kind === "package" && to.name === "react-native-web") return "nothing uses react-native-web (spec §0)";
+  // A test may use any other package and any built-in, whatever the layer: an app's tests too.
+  if (from.part === "test") return null;
   const key = from.layer === "app" ? (`app:${from.owner}` as const) : from.part;
   if (key === null) return null; // reported once, as "file is in no part folder"
   if (from.part === "manifest") return `a manifest imports only registry types, not ${to.name}`;
