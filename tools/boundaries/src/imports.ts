@@ -8,7 +8,7 @@ export type ImportKind =
   | "require" // require("x")
   | "import-equals" // import x = require("x")  (TypeScript; oxc's module record leaves it out)
   | "require-context" // require.context("./dir")  (Metro; bypasses the registry)
-  | "import-meta-glob" // import.meta.glob("./dir/*.ts"), import.meta.globEager(…)  (Vite; bypasses the registry)
+  | "import-meta-glob" // import.meta.glob("./dir/*.ts"), .globEager(…) (Vite), .webpackContext("./dir") (webpack); bypasses the registry
   | "dynamic-unknown"; // import(someVariable) — cannot be checked
 
 export interface ImportRef {
@@ -27,17 +27,20 @@ export interface ParsedImports {
 /**
  * The module references in one file that this function can see. oxc's module record supplies static
  * imports, re-exports and import("x") calls; require("x"), `import x = require("x")`,
- * require.context("./dir"), import.meta.glob("…") / import.meta.globEager("…") and the type-position
- * `import("x").T` are not in it, so they are found by walking the AST.
+ * require.context("./dir"), import.meta.glob("…") / .globEager("…") / .webpackContext("…") and the
+ * type-position `import("x").T` are not in it, so they are found by walking the AST. A callee is
+ * read through parentheses and through the wrappers type stripping removes (`require!`,
+ * `require as T`, `require satisfies T`, `<T>require`).
  *
  * Not seen, so nothing here can refuse them:
  * - triple-slash directives (`/// <reference path="…" />`, `/// <reference types="…" />`);
  * - JSDoc types (`@type {import("x")}`): comments are not walked;
  * - `require.resolve("x")`;
- * - a `require` reached through another name (`const r = require; r("x")`), and `createRequire`:
- *   only a call spelled `require(…)` or `require.context(…)` is recognised. The same holds for
- *   `import.meta` kept in a variable, and for a member reached by a computed key
- *   (`require["context"]`, `import.meta["glob"]`).
+ * - a `require` reached through another name (`const r = require; r("x")`) or another expression
+ *   (`(0, require)("x")`), and `createRequire`: only a call whose callee is `require` or
+ *   `require.context` is recognised. The same holds for `import.meta` kept in a variable, and for
+ *   a member reached by a computed key (`require["context"]`, `import.meta["glob"]`);
+ * - a worker entry written as `new URL("…", import.meta.url)`.
  */
 export function collectImports(filename: string, source: string): ParsedImports {
   const result = parseSync(filename, source);
@@ -78,31 +81,39 @@ export function collectImports(filename: string, source: string): ParsedImports 
       imports.push({ specifier: node.source.value, kind: "import", typeOnly: true, line: lineOf(node.start) });
     }
     if (node.type !== "CallExpression") return;
-    const callee = node.callee;
+    // The callee and, for a member call, its object are read through any wrapper:
+    // `require!("x")`, `(require as any).context(…)`, `import.meta.glob!(…)`.
+    const callee = unwrap(node.callee);
+    const object = callee?.type === "MemberExpression" ? unwrap(callee.object) : undefined;
     const first = node.arguments?.[0];
     const literal = first?.type === "Literal" && typeof first.value === "string" ? first.value : null;
     if (callee?.type === "Identifier" && callee.name === "require") {
       imports.push({ specifier: literal, kind: literal === null ? "dynamic-unknown" : "require", typeOnly: false, line: lineOf(node.start) });
     }
-    if (
-      callee?.type === "MemberExpression" &&
-      callee.object?.type === "Identifier" &&
-      callee.object.name === "require" &&
-      callee.property?.name === "context"
-    ) {
+    if (object?.type === "Identifier" && object.name === "require" && callee.property?.name === "context") {
       imports.push({ specifier: literal, kind: "require-context", typeOnly: false, line: lineOf(node.start) });
     }
     // import.meta is the MetaProperty whose first word is `import` (the other one is new.target).
-    if (
-      callee?.type === "MemberExpression" &&
-      callee.object?.meta?.name === "import" &&
-      (callee.property?.name === "glob" || callee.property?.name === "globEager")
-    ) {
+    if (object?.meta?.name === "import" && GLOB_METHODS.has(callee.property?.name)) {
       imports.push({ specifier: literal, kind: "import-meta-glob", typeOnly: false, line: lineOf(node.start) });
     }
   });
 
   return { imports, errors: result.errors.map((e) => e.message) };
+}
+
+/** The members of import.meta that hand back every module a pattern or a folder matches. */
+const GLOB_METHODS = new Set(["glob", "globEager", "webpackContext"]);
+
+/** What can sit around an expression without changing it: parentheses, and what type stripping removes (`x!`, `x as T`, `x satisfies T`, `<T>x`). */
+const WRAPPERS = new Set(["ParenthesizedExpression", "TSNonNullExpression", "TSAsExpression", "TSSatisfiesExpression", "TSTypeAssertion"]);
+
+// The expression inside any number of wrappers: `(require as any)` → `require`.
+// biome-ignore lint/suspicious/noExplicitAny: the AST is untyped JSON here.
+function unwrap(node: any): any {
+  let inner = node;
+  while (inner !== null && typeof inner === "object" && WRAPPERS.has(inner.type)) inner = inner.expression;
+  return inner;
 }
 
 /** "x" / 'x' / `x` (no substitutions) → x; anything else → null. */

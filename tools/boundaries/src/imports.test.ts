@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { collectImports } from "./imports";
+import { collectImports, type ImportKind } from "./imports";
 
 const SOURCE = [
   'import { a } from "./a";', //                       1
@@ -95,15 +95,55 @@ describe("collectImports: import.meta.glob", () => {
     "const d = import.meta.url;", //                                            4
     'const e = meta.glob("./an-object-called-meta");', //                       5
     'function F() { return new.target.glob("./not-import-meta"); }', //         6
+    'const g = import.meta.webpackContext("./g", { recursive: true });', //     7
   ].join("\n");
 
-  it("reports a glob or globEager call on import.meta and nothing else, with the pattern when it is one string", () => {
+  it("reports a glob, globEager or webpackContext call on import.meta and nothing else, with the pattern when it is one string", () => {
     const { imports, errors } = collectImports("fixture.ts", source);
     expect(errors).toEqual([]);
     expect(imports).toEqual([
       { specifier: "./a/*.ts", kind: "import-meta-glob", typeOnly: false, line: 1 },
       { specifier: "./b/*.ts", kind: "import-meta-glob", typeOnly: false, line: 2 },
       { specifier: null, kind: "import-meta-glob", typeOnly: false, line: 3 },
+      { specifier: "./g", kind: "import-meta-glob", typeOnly: false, line: 7 },
     ]);
+  });
+});
+
+// Type stripping leaves the plain call behind each of these, and a bundler's own collector lists it.
+describe("collectImports: a call written through parentheses or a TypeScript wrapper", () => {
+  const WRAPPERS: ((inner: string) => string)[] = [
+    (inner) => `(${inner})`,
+    (inner) => `${inner}!`,
+    (inner) => `(${inner} as any)`,
+    (inner) => `(${inner} satisfies unknown)`,
+    (inner) => `(<any>${inner})`,
+  ];
+  // Each call, with the wrapper around the whole callee and, for a member call, around its object.
+  const CALLS: [(wrap: (inner: string) => string) => string, ImportKind][] = [
+    [(wrap) => `${wrap("require")}("./x")`, "require"],
+    [(wrap) => `${wrap("require.context")}("./x")`, "require-context"],
+    [(wrap) => `${wrap("require")}.context("./x")`, "require-context"],
+    [(wrap) => `${wrap("import.meta.glob")}("./x")`, "import-meta-glob"],
+    [(wrap) => `${wrap("import.meta")}.glob("./x")`, "import-meta-glob"],
+  ];
+  const rows = CALLS.flatMap(([write, kind]) => WRAPPERS.map((wrap): [string, ImportKind] => [write(wrap), kind]));
+
+  it.each(rows)("%s → %s", (call, kind) => {
+    // A .ts file: an angle-bracket assertion does not parse in a .tsx one.
+    const { imports, errors } = collectImports("fixture.ts", `export const x = ${call};\n`);
+    expect(errors).toEqual([]);
+    expect(imports).toEqual([{ specifier: "./x", kind, typeOnly: false, line: 1 }]);
+  });
+
+  it("reports nothing for another callee or another member, wrapped the same way", () => {
+    const source = [
+      '(other as any)("./x");',
+      'other!.context("./x");',
+      'require!.resolve("./x");',
+      '(meta as any).glob("./x");',
+      '(import.meta as any).resolve("./x");',
+    ].join("\n");
+    expect(collectImports("fixture.ts", source)).toEqual({ imports: [], errors: [] });
   });
 });
