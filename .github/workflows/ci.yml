@@ -29,7 +29,9 @@ jobs:
       mobile: ${{ steps.filter.outputs.mobile }}
     steps:
       - uses: actions/checkout@v5
-      - uses: dorny/paths-filter@v4
+      # This and pnpm/action-setup are the two actions that are not GitHub's
+      # own. Both are pinned to a commit: a tag can be moved, a commit cannot.
+      - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
         id: filter
         with:
           # A path in no group runs no job, and ci-ok stays green, so a new
@@ -60,7 +62,7 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       # Takes the pnpm version from the root package.json's packageManager.
-      - uses: pnpm/action-setup@v6
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
       - uses: actions/setup-node@v5
         with:
           node-version: 24
@@ -74,6 +76,13 @@ jobs:
       # here too: give it its own job and exclude it by name.
       - run: pnpm --filter "!@tsa/web" --filter "!@tsa/mobile" --fail-if-no-match typecheck
       - run: pnpm --filter "!@tsa/web" --filter "!@tsa/mobile" --fail-if-no-match test
+      # The repo's own guards, by name. They ran a moment ago in the sweep
+      # above, but the sweep runs whatever `test` script each package it finds
+      # defines: if @tsa/boundaries lost that script or left the workspace,
+      # the other tool's tests would keep the sweep green with these never
+      # run. This step calls Vitest itself, so it needs no script, and it
+      # names the package, so it fails when the package is gone.
+      - run: pnpm --filter @tsa/boundaries --fail-if-no-match exec vitest run src/repo.test.ts
 
   web:
     needs: changes
@@ -81,7 +90,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-      - uses: pnpm/action-setup@v6
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
       - uses: actions/setup-node@v5
         with:
           node-version: 24
@@ -113,7 +122,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-      - uses: pnpm/action-setup@v6
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
       - uses: actions/setup-node@v5
         with:
           node-version: 24
@@ -129,7 +138,7 @@ jobs:
         id: pw
         working-directory: apps/web
         run: echo "version=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ steps.pw.outputs.version }}
@@ -142,7 +151,7 @@ jobs:
       - run: pnpm --filter @tsa/web --fail-if-no-match exec playwright test
         env:
           CI: "true"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: ${{ !cancelled() }}
         with:
           name: playwright-report
@@ -157,7 +166,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-      - uses: pnpm/action-setup@v6
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
       - uses: actions/setup-node@v5
         with:
           node-version: 24
@@ -169,13 +178,20 @@ jobs:
       # direct dependencies: a native module that arrives as another package's
       # peer is invisible to it (see packageExtensions in pnpm-workspace.yaml).
       - run: pnpm --filter @tsa/mobile --fail-if-no-match exec expo install --check
-      - run: pnpm --filter @tsa/mobile --fail-if-no-match exec jest --ci
+      # No --ci flag: Jest turns CI mode on by itself when the CI variable is
+      # set, which GitHub Actions does.
+      - run: pnpm --filter @tsa/mobile --fail-if-no-match test
       # Bundles the JavaScript for both platforms without a native build: proves
       # Metro resolves the workspace packages and the generated registry.
       - run: pnpm --filter @tsa/mobile --fail-if-no-match export
 
   # The one check to require: green only when every job above passed or was
-  # skipped by the path filter.
+  # skipped by the path filter. Requiring it on `main` would stop the refresh
+  # workflows as they are: they push data commits straight to `main` with the
+  # default token, GitHub starts no workflow run for a push or a pull request
+  # made with that token, and a commit without this check would be refused.
+  # They would first need an identity that may bypass the rule, or one whose
+  # pull requests do start CI.
   ci-ok:
     needs: [changes, tools, web, e2e, mobile]
     if: ${{ always() }}
