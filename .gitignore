@@ -37,6 +37,8 @@ pnpm-debug.log*
 /apps/web/data/app.db*
 /apps/web/data/ingest.log
 /apps/web/data/.ingest.lock
+# photos uploaded to a local server (apps/web/lib/server/photoStore.ts writes them here)
+/apps/web/data/uploads/
 
 # Written by tools/registry-gen on every install (spec §0 "Registry"); never committed,
 # so parallel feature branches never conflict on it.
@@ -52,6 +54,9 @@ pnpm-debug.log*
 /apps/web/blob-report/
 /apps/web/playwright/.cache/
 /apps/web/e2e/.auth/
+
+# the local browser-glance harness (never committed)
+/apps/web/.glance/
 
 # Claude Code runtime state. On the old checkout this lived only in
 # .git/info/exclude, which a clone never gets.
