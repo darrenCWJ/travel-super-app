@@ -241,6 +241,25 @@ describe("scanRepo: a specifier is judged by where it lands, not by how it looks
     });
   });
 
+  // repo.test.ts turns this on for the real tree, where every package is installed. Without it an
+  // alias whose target the resolver cannot find (here a file that exists only as only.native.ts)
+  // is taken for a package that is not installed.
+  it("refuses a value import that resolves nowhere when told to, and still judges a type-only one by its name", () => {
+    const files = {
+      ...featurePackage,
+      "features/money/server/only.native.ts": "export const s = 1;\n",
+      "apps/mobile/tsconfig.json": JSON.stringify({ compilerOptions: { paths: { "feat/*": ["../../features/*"] } } }),
+      "apps/mobile/src/a.tsx": 'import { s } from "feat/money/server/only";\nimport type { T } from "types-only";\nimport type { D } from "react-dom";\nexport default s;\n',
+    };
+    withRepo(files, (root) => {
+      const found = (refuseUnresolved?: boolean) =>
+        scanRepo({ root, tsconfigs: { "apps/mobile": "apps/mobile/tsconfig.json" }, refuseUnresolved }).violations.map((v) => [v.file, v.line, v.reason]);
+      const byName = ["apps/mobile/src/a.tsx", 3, "apps/mobile may not import react-dom"];
+      expect(found(true)).toEqual([["apps/mobile/src/a.tsx", 1, "cannot resolve feat/money/server/only: Cannot find module 'feat/money/server/only'"], byName]);
+      expect(found()).toEqual([byName]);
+    });
+  });
+
   // A workspace package in a folder the scan does not list (repo.test.ts keeps that list honest) is
   // refused as a file in no zone, not waved through as an outside package.
   it("refuses a linked package whose files sit in the repo outside every zone", () => {

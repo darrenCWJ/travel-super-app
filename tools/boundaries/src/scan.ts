@@ -29,6 +29,12 @@ export interface ScanOptions {
    * The scan throws when the resolver cannot load one of them.
    */
   tsconfigs?: Record<string, string>;
+  /**
+   * Refuse a bare specifier that does not resolve, unless the import is type-only: for a tree whose
+   * packages are all installed. Off by default, and such a specifier is then taken for a package
+   * that is not installed and judged by its name.
+   */
+  refuseUnresolved?: boolean;
 }
 
 /** The mobile app's root-level config files (app.config.js …) are left out on purpose: they run in Node, not in the app. */
@@ -122,7 +128,7 @@ export function scanRepo(options: ScanOptions): ScanResult {
     if (ref.kind === "require-context") return "require.context bypasses the generated registry";
     if (ref.kind === "import-meta-glob") return "import.meta.glob bypasses the generated registry";
     const specifier = ref.specifier!;
-    const resolved = resolveTarget(specifier, from);
+    const resolved = resolveTarget(specifier, from, ref.typeOnly);
     if (typeof resolved === "string") return resolved;
     // The zone rules speak first; what they allow must still arrive through the other package's name.
     return checkEdge(zone, resolved.target) ?? checkPackageBoundary(specifier, from, resolved.rel);
@@ -144,7 +150,7 @@ export function scanRepo(options: ScanOptions): ScanResult {
     return sameFile ? null : `reaches into ${owner} through a path alias, not through its exports map`;
   }
 
-  function resolveTarget(specifier: string, from: string): Resolved | string {
+  function resolveTarget(specifier: string, from: string, typeOnly: boolean): Resolved | string {
     const name = packageName(specifier);
     // The resolver is asked before the spelling is believed: a path alias can look like a package
     // ("feat/x") or like a Node built-in ("util").
@@ -158,8 +164,11 @@ export function scanRepo(options: ScanOptions): ScanResult {
     // Anywhere but on a file of the repo, a built-in's name means the built-in, as it does to Node.
     if (isBuiltin(specifier)) return { target: { kind: "builtin", name: specifier }, rel: null };
     if (!result.path) {
-      // Not installed, or a subpath the package does not export: an outside package, judged by its name.
-      if (name !== null && !workspace.has(name)) return { target: { kind: "package", name }, rel: null };
+      // Not installed, or a subpath the package does not export: an outside package, judged by its
+      // name. Under refuseUnresolved only a type-only import is, which may name a package that has
+      // types and no code (topojson-specification).
+      const outside = name !== null && !workspace.has(name);
+      if (outside && (typeOnly || options.refuseUnresolved !== true)) return { target: { kind: "package", name }, rel: null };
       return `cannot resolve ${specifier}: ${result.error ?? "unknown error"}`;
     }
     if (name === null) return `${specifier} resolves outside the repo`;
