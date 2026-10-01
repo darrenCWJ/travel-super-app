@@ -144,6 +144,13 @@ describe("scanRepo: which folders are walked", () => {
     });
   });
 
+  // Spec §0 serves universal links and app links from apps/web/src/app/.well-known.
+  it("walks .well-known, the one dot-folder that holds routes and not a tool's output", () => {
+    withRepo({ "apps/web/app/.well-known/assetlinks.json/route.ts": CODE }, (root) => {
+      expect(scanRepo({ root }).scannedFiles).toEqual(["apps/web/app/.well-known/assetlinks.json/route.ts"]);
+    });
+  });
+
   it("scans the mobile app's tests folder, and leaves its root-level config files alone", () => {
     const files = {
       "features/money/server/s.ts": "export const s = 1;\n",
