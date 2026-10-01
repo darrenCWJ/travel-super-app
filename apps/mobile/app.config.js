@@ -16,7 +16,7 @@ module.exports = {
   plugins: [
     "expo-router",
     // CMake 3.31.6 or newer builds past Windows' 260-character paths. The
-    // Android SDK must have this exact version installed (Task 9).
+    // Android SDK must have this exact version installed (phase 0 plan, Task 9).
     ["expo-build-properties", { android: { cmakeVersion: "3.31.6" } }],
   ],
 };
