@@ -41,6 +41,8 @@ export interface ScanOptions {
 export const SCAN_ROOTS = ["apps/web", "apps/mobile/src", "apps/mobile/tests", "features", "platform", "reference"];
 /** Build output. Skipped only directly under a scan root: deeper down these are ordinary folder names. */
 const BUILD_OUTPUT_DIRS = new Set(["dist", "build", "coverage", "android", "ios", "playwright-report", "test-results"]);
+/** Not a tool's output like the other dot-folders: spec §0 puts routes in apps/web/src/app/.well-known. */
+const ROUTE_DOT_DIR = ".well-known";
 const CODE_FILE = /\.[cm]?[jt]sx?$/;
 // Where the scan looks for the workspace's own packages: each layer is one package, each folder under a group is one.
 const LAYER_ROOTS = ["features", "platform", "reference"];
@@ -285,11 +287,14 @@ export function isCodeFile(name: string): boolean {
   return CODE_FILE.test(name) && !name.endsWith(".d.ts");
 }
 
-/** Every code file under a scan root. node_modules and dot-folders are skipped at any depth. */
+/**
+ * Every code file under a scan root. node_modules and dot-folders are skipped at any depth, except
+ * the one dot-folder that holds routes.
+ */
 function* walk(dir: string, isScanRoot = true): Generator<string> {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     if (entry.isDirectory()) {
-      if (entry.name === "node_modules" || entry.name.startsWith(".")) continue;
+      if (entry.name === "node_modules" || (entry.name.startsWith(".") && entry.name !== ROUTE_DOT_DIR)) continue;
       if (isScanRoot && BUILD_OUTPUT_DIRS.has(entry.name)) continue;
       yield* walk(join(dir, entry.name), false);
     } else if (isCodeFile(entry.name)) {
