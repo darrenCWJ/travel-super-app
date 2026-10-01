@@ -188,10 +188,10 @@ jobs:
   # The one check to require: green only when every job above passed or was
   # skipped by the path filter. Requiring it on `main` would stop the refresh
   # workflows as they are: they push data commits straight to `main` with the
-  # default token, GitHub starts no workflow run for a push or a pull request
-  # made with that token, and a commit without this check would be refused.
-  # They would first need an identity that may bypass the rule, or one whose
-  # pull requests do start CI.
+  # default token, GitHub starts no workflow run for such a push, and a commit
+  # without this check would be refused. They would first need an identity
+  # that may bypass the rule, or to open pull requests instead, whose runs
+  # GitHub holds until someone with write access approves them.
   ci-ok:
     needs: [changes, tools, web, e2e, mobile]
     if: ${{ always() }}
