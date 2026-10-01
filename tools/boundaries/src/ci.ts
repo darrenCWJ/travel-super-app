@@ -5,7 +5,8 @@ import { parse } from "yaml";
  * shown a broken workflow without the real one being edited. The workflow gates every job on a
  * path filter, and a job that is skipped counts as success: a path in no filter group, or a gate
  * that reads a name the filter does not set, leaves `ci-ok` green with nothing having run. A job
- * the summary check does not wait for can fail without turning it red.
+ * the summary check does not wait for can fail without turning it red, and so can one that may
+ * continue on error. The summary job's own shape and the workflow's triggers are pinned as well.
  */
 
 /** The parts of a GitHub Actions workflow these checks read. */
@@ -13,15 +14,19 @@ export interface Step {
   id?: string;
   uses?: string;
   run?: string;
+  if?: string;
   with?: Record<string, unknown>;
+  "continue-on-error"?: unknown;
 }
 export interface Job {
   needs?: string | string[];
   if?: string;
   outputs?: Record<string, string>;
   steps?: Step[];
+  "continue-on-error"?: unknown;
 }
 export interface Workflow {
+  on?: unknown;
   jobs: Record<string, Job>;
 }
 
@@ -118,6 +123,52 @@ export function jobsNotNeededBy(workflow: Workflow, summary: string): string[] {
   return Object.keys(workflow.jobs).filter((name) => name !== summary && !needs.includes(name));
 }
 
+const ALWAYS = "${{ always() }}";
+const A_JOB_FAILED = "${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}";
+
+/**
+ * What is wrong with the summary job's own shape. It has to run whatever happened to the jobs it
+ * waits for: without `always()` a failed job leaves it skipped, and a skipped job counts as
+ * success. And its first step has to fail it when one of those jobs failed or was cancelled.
+ */
+export function summaryProblems(workflow: Workflow, summary = "ci-ok"): string[] {
+  const job = workflow.jobs[summary];
+  if (job === undefined) throw new Error(`the workflow has no ${summary} job`);
+  const first = job.steps?.[0];
+  const problems: string[] = [];
+  if (job.if !== ALWAYS) problems.push(`job ${summary} is gated by ${job.if ?? "nothing"}, not by ${ALWAYS}`);
+  if (first?.if !== A_JOB_FAILED) problems.push(`the first step of ${summary} is gated by ${first?.if ?? "nothing"}, not by ${A_JOB_FAILED}`);
+  if (first?.run !== "exit 1") problems.push(`the first step of ${summary} runs ${first?.run ?? "nothing"}, not exit 1`);
+  return problems;
+}
+
+/**
+ * The jobs and the steps that carry `continue-on-error`, whatever its value. On a step it keeps the
+ * job from failing when the step fails, and on a job it keeps the run from failing when the job
+ * does: either way a failure the summary job exists to report could pass.
+ */
+export function continueOnError(workflow: Workflow): string[] {
+  return Object.entries(workflow.jobs).flatMap(([name, job]) => [
+    ...("continue-on-error" in job ? [`job ${name}`] : []),
+    ...(job.steps ?? []).flatMap((step, index) => ("continue-on-error" in step ? [`job ${name}, step ${index + 1}`] : [])),
+  ]);
+}
+
+/**
+ * What is wrong with the workflow's triggers: `on.push.branches` has to be ["**"], a push to any
+ * branch, and `on.pull_request` has to be there.
+ */
+export function triggerProblems(workflow: Workflow): string[] {
+  const on = workflow.on;
+  // Anything but a map of triggers (a list of event names, a single name, nothing) has neither key.
+  const triggers: { push?: { branches?: unknown } | null; pull_request?: unknown } = typeof on === "object" ? { ...on } : {};
+  const branches = triggers.push?.branches;
+  const problems: string[] = [];
+  if (JSON.stringify(branches) !== '["**"]') problems.push(`on.push.branches is ${branches === undefined ? "not set" : JSON.stringify(branches)}, not ["**"]`);
+  if (!("pull_request" in triggers)) problems.push("on.pull_request is missing");
+  return problems;
+}
+
 /** Every line of every `run:` script, with the job it belongs to. */
 function runLines(workflow: Workflow): [job: string, line: string][] {
   return Object.entries(workflow.jobs).flatMap(([name, job]) =>
@@ -125,13 +176,16 @@ function runLines(workflow: Workflow): [job: string, line: string][] {
   );
 }
 
+/** `-F`, the short form of --filter, as a word of its own on a pnpm line (grep and others have a -F too). */
+const SHORT_FILTER = /\bpnpm\b.*\s-F\s/;
+
 /**
- * The `run:` lines that pick packages with --filter but lack --fail-if-no-match. pnpm exits 0 when
- * a filter selects no package, so such a line would turn into a silent no-op after a rename.
+ * The `run:` lines that pick packages with --filter or -F but lack --fail-if-no-match. pnpm exits 0
+ * when a filter selects no package, so such a line would turn into a silent no-op after a rename.
  */
 export function filtersWithoutFailIfNoMatch(workflow: Workflow): string[] {
   return runLines(workflow)
-    .filter(([, line]) => line.includes("--filter") && !line.includes("--fail-if-no-match"))
+    .filter(([, line]) => (line.includes("--filter") || SHORT_FILTER.test(line)) && !line.includes("--fail-if-no-match"))
     .map(([job, line]) => `${job}: ${line}`);
 }
 
