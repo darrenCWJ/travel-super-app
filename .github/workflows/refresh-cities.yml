@@ -141,7 +141,8 @@ jobs:
       # on Node built-ins alone, so this job needs no node_modules and now
       # starts ingesting immediately. That does drop the old fail-fast on a
       # broken lockfile — accepted, because ci.yml runs
-      # `pnpm install --frozen-lockfile` on every push to every branch, so a
+      # `pnpm install --frozen-lockfile` on every push, to every branch, that
+      # changes a package.json, the lockfile or pnpm-workspace.yaml, so a
       # lockfile that cannot install is already red before it can reach a
       # nightly run. `commit` still installs, for vitest.
 
@@ -287,11 +288,11 @@ jobs:
       # lib/server/cityIndex.test.ts and lib/countryFacts.test.ts are the
       # files that read these artifacts off disk today, but naming them here
       # would be a list that silently stops being complete the day someone
-      # adds a fourth. This is the web package's share of ci.yml's gate
-      # (`pnpm test`), which is the point — see the header. ci.yml's other
-      # half, `pnpm typecheck`, is deliberately not repeated: these scripts
-      # write JSON only, so every TypeScript file in the tree is
-      # byte-identical to the commit CI already type-checked.
+      # adds a fourth. This is the command ci.yml's `web` job runs the suite
+      # with, which is the point — see the header. That job's `typecheck`
+      # step is deliberately not repeated: these scripts write JSON only, so
+      # every TypeScript file in the tree is byte-identical to the commit CI
+      # already type-checked.
       #
       # --fail-if-no-match is load-bearing: pnpm exits 0 when a filter matches
       # no package, so without it a renamed @tsa/web would leave this step

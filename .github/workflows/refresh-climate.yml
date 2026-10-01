@@ -191,7 +191,7 @@ jobs:
       # refresh-cities.yml's identically named step: ci.yml never runs on
       # this workflow's own commit (see header), so this is the only gate
       # standing between a bad build and a production deploy.
-      # ci.yml's other half, `pnpm typecheck`, is deliberately not repeated:
+      # ci.yml's `web` job also type-checks; that is deliberately not repeated:
       # this script writes JSON only, so every TypeScript file in the tree is
       # byte-identical to what the push that put this commit on the dispatch
       # branch already type-checked.
