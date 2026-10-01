@@ -86,3 +86,24 @@ describe("collectImports", () => {
     expect(broken.errors.length).toBeGreaterThan(0);
   });
 });
+
+describe("collectImports: import.meta.glob", () => {
+  const source = [
+    'const a = import.meta.glob("./a/*.ts");', //                               1
+    'const b = import.meta.globEager("./b/*.ts");', //                          2
+    'const c = import.meta.glob(["./c/*.ts", "./d/*.ts"], { eager: true });', // 3
+    "const d = import.meta.url;", //                                            4
+    'const e = meta.glob("./an-object-called-meta");', //                       5
+    'function F() { return new.target.glob("./not-import-meta"); }', //         6
+  ].join("\n");
+
+  it("reports a glob or globEager call on import.meta and nothing else, with the pattern when it is one string", () => {
+    const { imports, errors } = collectImports("fixture.ts", source);
+    expect(errors).toEqual([]);
+    expect(imports).toEqual([
+      { specifier: "./a/*.ts", kind: "import-meta-glob", typeOnly: false, line: 1 },
+      { specifier: "./b/*.ts", kind: "import-meta-glob", typeOnly: false, line: 2 },
+      { specifier: null, kind: "import-meta-glob", typeOnly: false, line: 3 },
+    ]);
+  });
+});

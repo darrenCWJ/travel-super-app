@@ -13,6 +13,8 @@ export interface Zone {
 }
 
 const LAYERS: Record<string, Layer> = { features: "feature", platform: "platform", reference: "reference" };
+/** The layers tools/registry-gen writes a `_registry` folder into (spec §0 "Registry"). reference/ has none. */
+const REGISTRY_LAYERS = new Set<Layer>(["feature", "platform"]);
 const PART_DIRS = new Set<Part>(["core", "client", "server", "db", "web", "mobile"]);
 const TEST_DIRS = new Set(["tests", "e2e"]);
 export const TEST_FILE = /\.(test|spec)\.[cm]?[jt]sx?$/;
@@ -28,7 +30,7 @@ export function classify(rel: string): Zone | null {
   const layer = LAYERS[seg[0]];
   if (layer === undefined || seg.length < 3) return null;
   const owner = seg[1];
-  if (owner === "_registry") return { layer, owner, part: "registry", kind: seg[2].replace(/\.[^.]+$/, "") };
+  if (owner === "_registry" && REGISTRY_LAYERS.has(layer)) return { layer, owner, part: "registry", kind: seg[2].replace(/\.[^.]+$/, "") };
   if (TEST_FILE.test(rel) || TEST_DIRS.has(seg[2])) return { layer, owner, part: "test" };
   if (layer === "feature" && seg.length === 3 && /^manifest\.[cm]?[jt]s$/.test(seg[2])) {
     return { layer, owner, part: "manifest" };

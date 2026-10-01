@@ -4,23 +4,48 @@ import type { Part, Zone } from "./zones";
 export type Target =
   | { kind: "zone"; zone: Zone }
   | { kind: "unzoned"; rel: string } // inside the repo, but in no zone (a stray file, a tools/ script)
-  | { kind: "package"; name: string } // an npm package outside the workspace
+  // An npm package outside the workspace. `native`: its own manifest requires react-native (the scan
+  // reads it), which a name such as @shopify/flash-list does not say.
+  | { kind: "package"; name: string; native?: boolean }
   | { kind: "builtin"; name: string }; // node:fs, fs, …
 
-const isReact = (p: string) => p === "react";
-const isReactDom = (p: string) => p === "react-dom";
-const isReactNative = (p: string) =>
-  p === "react-native" || p.startsWith("react-native-") || p.startsWith("@react-native/") || p.startsWith("@react-native-");
-const isExpo = (p: string) => p === "expo" || p.startsWith("expo-") || p.startsWith("@expo/");
-const isNext = (p: string) => p === "next" || p.startsWith("@next/");
-const isDrizzle = (p: string) => p === "drizzle-orm";
+type Package = Extract<Target, { kind: "package" }>;
+
+/** "@scope/name" → ["@scope", "name"]; "name" → [null, "name"]. */
+function splitScope(name: string): [scope: string | null, bare: string] {
+  const slash = name.indexOf("/");
+  return name.startsWith("@") && slash !== -1 ? [name.slice(0, slash), name.slice(slash + 1)] : [null, name];
+}
+
+const isReact = (p: Package) => p.name === "react";
+const isReactDom = (p: Package) => p.name === "react-dom";
+// The React Native family. By manifest: `native` (see Target). By name: react-native and
+// react-native-<x>, alone or in any scope; a scoped name that ends -react-native; and everything in
+// the scopes @react-native, @react-native-<x> and @react-navigation.
+const isReactNative = (p: Package) => {
+  if (p.native === true) return true;
+  const [scope, bare] = splitScope(p.name);
+  if (scope === "@react-native" || scope?.startsWith("@react-native-") || scope === "@react-navigation") return true;
+  if (bare === "react-native" || bare.startsWith("react-native-")) return true;
+  return scope !== null && bare.endsWith("-react-native");
+};
+// The Expo family: expo and expo-<x>, alone or in any scope, and everything in the scope @expo.
+const isExpo = (p: Package) => {
+  const [scope, bare] = splitScope(p.name);
+  return scope === "@expo" || bare === "expo" || bare.startsWith("expo-");
+};
+const isNext = (p: Package) => p.name === "next" || p.name.startsWith("@next/");
+const isDrizzle = (p: Package) => p.name === "drizzle-orm";
 
 interface PackageRule {
-  banned: ((name: string) => boolean)[];
+  banned: ((pkg: Package) => boolean)[];
   builtins: boolean;
 }
 
-/** Packages each part may not use (spec §0's "Never" column). Tests and registries are unrestricted. */
+/**
+ * Packages each part may not use (spec §0's "Never" column). Tests and registries have no entry:
+ * the one package they may not use is react-native-web, which checkPackage refuses for everyone.
+ */
 const PACKAGE_RULES: Partial<Record<Part | "app:web" | "app:mobile", PackageRule>> = {
   core: { banned: [isReact, isReactDom, isReactNative, isExpo, isNext, isDrizzle], builtins: false },
   client: { banned: [isReactDom, isReactNative, isExpo, isNext, isDrizzle], builtins: false },
@@ -65,13 +90,16 @@ export function checkEdge(from: Zone, to: Target): string | null {
 }
 
 function checkPackage(from: Zone, to: Extract<Target, { kind: "package" | "builtin" }>): string | null {
+  // First, because it holds for everyone: for tests and registries, which have no other package
+  // rule, and on the mobile side, where the rest of the React Native family is allowed.
+  if (to.kind === "package" && to.name === "react-native-web") return "nothing uses react-native-web (spec §0)";
   const key = from.layer === "app" ? (`app:${from.owner}` as const) : from.part;
   if (key === null) return null; // reported once, as "file is in no part folder"
   if (from.part === "manifest") return `a manifest imports only registry types, not ${to.name}`;
   const rule = PACKAGE_RULES[key as keyof typeof PACKAGE_RULES];
   if (rule === undefined) return null;
   if (to.kind === "builtin") return rule.builtins ? null : `${describe(from)} may not use Node built-in ${to.name}`;
-  return rule.banned.some((test) => test(to.name)) ? `${describe(from)} may not import ${to.name}` : null;
+  return rule.banned.some((test) => test(to)) ? `${describe(from)} may not import ${to.name}` : null;
 }
 
 function checkZone(from: Zone, to: Zone): string | null {
