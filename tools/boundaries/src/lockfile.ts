@@ -26,9 +26,11 @@ export function lockedVersions(lockfileText: string): Map<string, string[]> {
   const versions = new Map<string, string[]>();
   for (const key of Object.keys(packages)) {
     const plain = key.replace(/\(.*$/, "");
-    const at = plain.lastIndexOf("@");
-    // "@scope/name" has its only "@" at 0: a key with no version is a format this does not know.
-    if (at <= 0) throw new Error(`cannot read "${key}" in the lockfile's packages section as name@version`);
+    // The first "@" past position 0, where a scope's own "@" sits: a version can hold one too (a git
+    // URL with a user name), so the last "@" would cut the name too late.
+    const at = plain.indexOf("@", 1);
+    // A key with no version is a format this does not know.
+    if (at === -1) throw new Error(`cannot read "${key}" in the lockfile's packages section as name@version`);
     const name = plain.slice(0, at);
     versions.set(name, [...(versions.get(name) ?? []), plain.slice(at + 1)]);
   }
