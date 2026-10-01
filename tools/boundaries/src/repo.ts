@@ -43,6 +43,20 @@ export function exportsProblems(name: string, exports: unknown): string[] {
   });
 }
 
+/** The manifest fields that redirect resolution in a bundler: `browser` on the web, `react-native` in Metro. */
+const REDIRECT_FIELDS = ["browser", "react-native"];
+
+/**
+ * What is wrong with the manifest of the workspace package `name`: it has a `browser` or a
+ * `react-native` field. Any shape is refused, a map of files or a plain `false` alike: the scan's
+ * resolver follows neither field, so a bundler and the scan could land on different files.
+ */
+export function redirectFieldProblems(name: string, manifest: Record<string, unknown>): string[] {
+  return REDIRECT_FIELDS.filter((field) => Object.hasOwn(manifest, field)).map(
+    (field) => `${name}: package.json has a "${field}" field: a bundler may follow it to files the scan's resolver does not read (it follows exports and main)`,
+  );
+}
+
 const TSCONFIG_FILE = /(^|\/)tsconfig[^/]*\.json$/;
 // Looked for in the text, not in the parsed file: a tsconfig may hold comments, and a false alarm is loud.
 const ALIAS_KEYS = ['"paths"', '"baseUrl"'];
