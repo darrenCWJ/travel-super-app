@@ -8,7 +8,6 @@ module.exports = {
   scheme: "travelsuperapp",
   version: "0.0.0",
   orientation: "portrait",
-  userInterfaceStyle: "automatic",
   // No web target: the website is apps/web, and screens are never shared (spec §0).
   platforms: ["ios", "android"],
   ios: { bundleIdentifier: "com.darrencwj.travelsuperapp" },
