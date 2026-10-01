@@ -185,6 +185,19 @@ describe("scanRepo: a package whose own manifest requires react-native", () => {
     });
   });
 
+  // The two branches of the rule disagree here, and the dependency wins: it is installed whatever
+  // the peer's meta says, so a dependency is not read as a peer.
+  it("refuses one that depends on react-native even when it marks a react-native peer optional", () => {
+    const fields = {
+      dependencies: { "react-native": "0.86.3" },
+      peerDependencies: { "react-native": "*" },
+      peerDependenciesMeta: { "react-native": { optional: true } },
+    };
+    withRepo({ ...installed(fields), ...importers }, (root) => {
+      expect(found(root)).toEqual(refused);
+    });
+  });
+
   it("allows one whose react-native peer is optional", () => {
     const fields = { peerDependencies: { "react-native": "*" }, peerDependenciesMeta: { "react-native": { optional: true } } };
     withRepo({ ...installed(fields), ...importers }, (root) => {
