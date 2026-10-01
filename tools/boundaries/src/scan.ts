@@ -175,6 +175,11 @@ export function scanRepo(options: ScanOptions): ScanResult {
     // What is installed says what it is, in its own manifest: an npm alias or a tsconfig alias can
     // spell any package anyhow. With no manifest to read, the spelling stands.
     const manifest = installed ? installedManifest(result.path, manifestIn) : null;
+    // A workspace package's own files are in the repo. Its name landing here, by the manifest or by
+    // the specifier, means a copy of it (pnpm's injected dependencies put one in node_modules),
+    // whose files are in no zone: no outside package.
+    const copied = [manifest?.name, name].find((candidate) => candidate !== undefined && workspace.has(candidate));
+    if (copied !== undefined) return `${specifier} resolves to a copy of the workspace package ${copied}, not to its own files: ${rel}`;
     if (manifest === null) return { target: { kind: "package", name }, rel: null };
     return { target: { kind: "package", name: manifest.name, native: requiresReactNative(manifest) }, rel: null };
   }

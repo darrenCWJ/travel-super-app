@@ -519,6 +519,59 @@ describe("scanRepo: another package's files are reached through its name", () =>
     withRepo(files, check, links);
   });
 
+  // pnpm's injected dependencies copy a workspace package into an app's node_modules. To the
+  // resolver the copy is an installed package, and its files are in no zone.
+  it("refuses a workspace package that resolves to a copy of it under node_modules", () => {
+    const copy = (folder: string, manifest?: string) => ({
+      ...(manifest === undefined ? {} : { [`apps/mobile/node_modules/${folder}/package.json`]: manifest }),
+      [`apps/mobile/node_modules/${folder}/sync/server/index.ts`]: "export const api = 1;\n",
+    });
+    const files = {
+      ...packages,
+      ...copy("@fx/platform", workspaceManifest("@fx/platform", { exports: { "./*/server": "./*/server/index.ts" } })),
+      "apps/mobile/src/a.tsx": 'import { api } from "@fx/platform/sync/server";\nexport default api;\n',
+      // Under another folder name, the copy's own manifest still says which package it is.
+      ...copy("plat", workspaceManifest("@fx/platform")),
+      "apps/mobile/src/b.tsx": 'import { api } from "plat/sync/server/index";\nexport default api;\n',
+      // With no manifest at all, the specifier's own name does.
+      ...copy("@fx/features"),
+      "apps/mobile/src/c.tsx": 'import { api } from "@fx/features/sync/server/index";\nexport default api;\n',
+    };
+    const refused = (file: string, specifier: string, owner: string, folder: string) => [
+      `apps/mobile/src/${file}`,
+      1,
+      `${specifier} resolves to a copy of the workspace package ${owner}, not to its own files: apps/mobile/node_modules/${folder}/sync/server/index.ts`,
+    ];
+    const check = (root: string) => {
+      expect(found(root)).toEqual([
+        refused("a.tsx", "@fx/platform/sync/server", "@fx/platform", "@fx/platform"),
+        refused("b.tsx", "plat/sync/server/index", "@fx/platform", "plat"),
+        refused("c.tsx", "@fx/features/sync/server/index", "@fx/features", "@fx/features"),
+      ]);
+    };
+    withRepo(files, check, links);
+  });
+
+  // The repo is a folder inside the temp folder here, so that the name can lead out of it.
+  it("refuses a workspace package's name that leads outside the repo, in the same words", () => {
+    const files = {
+      "repo/features/package.json": workspaceManifest("@fx/features"),
+      "repo/features/money/core/index.ts": CODE,
+      "elsewhere/features/money/core/index.ts": CODE,
+      "repo/apps/web/page.tsx": 'import "@fx/features/money/core/index";\n',
+    };
+    const check = (root: string) => {
+      expect(found(join(root, "repo"))).toEqual([
+        [
+          "apps/web/page.tsx",
+          1,
+          "@fx/features/money/core/index resolves to a copy of the workspace package @fx/features, not to its own files: ../elsewhere/features/money/core/index.ts",
+        ],
+      ]);
+    };
+    withRepo(files, check, [["elsewhere/features", "repo/node_modules/@fx/features"]]);
+  });
+
   it("lets the zone rules speak first", () => {
     const files = { ...packages, "apps/mobile/src/a.tsx": 'import { api } from "../../../platform/sync/server/index";\nexport default api;\n' };
     const check = (root: string) => {
