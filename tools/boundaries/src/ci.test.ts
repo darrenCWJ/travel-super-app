@@ -62,7 +62,7 @@ describe("the CI workflow", () => {
   // Vitest runs the files it finds and says nothing about a name that matches none, so a guard
   // that was renamed or deleted would drop out of the by-name step without turning it red.
   it("names this package's repo guards in its by-name step, and each of them exists", () => {
-    expect(namedTestFiles(workflow)).toEqual({ "@tsa/boundaries": ["src/repo.test.ts", "src/ci.test.ts"] });
+    expect(namedTestFiles(workflow)).toEqual({ "@tsa/boundaries": ["src/repo.test.ts", "src/ci.test.ts", "src/lockfile.test.ts"] });
     const missing = namedTestFiles(workflow)["@tsa/boundaries"].filter((file) => !existsSync(join(packageDir, file)));
     expect(missing).toEqual([]);
   });
