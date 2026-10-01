@@ -29,10 +29,14 @@ const isReactNative = (p: Package) => {
   if (bare === "react-native" || bare.startsWith("react-native-")) return true;
   return scope !== null && bare.endsWith("-react-native");
 };
-// The Expo family: expo and expo-<x>, alone or in any scope, and everything in the scope @expo.
+// The Expo family, by name: expo itself, expo-<x> alone or in any scope, and everything in the scope
+// @expo. A scoped package named exactly expo is not in it: the server imports @better-auth/expo's
+// root (spec §0), so such a package is judged by its manifest like any other.
+// That package's /client entry is the phone's: the rule for it belongs to the phase 1 identity work.
 const isExpo = (p: Package) => {
   const [scope, bare] = splitScope(p.name);
-  return scope === "@expo" || bare === "expo" || bare.startsWith("expo-");
+  if (scope === "@expo" || bare.startsWith("expo-")) return true;
+  return scope === null && bare === "expo";
 };
 const isNext = (p: Package) => p.name === "next" || p.name.startsWith("@next/");
 const isDrizzle = (p: Package) => p.name === "drizzle-orm";
