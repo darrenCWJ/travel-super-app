@@ -86,6 +86,12 @@ describe("lockfileProblems", () => {
     ]);
   });
 
+  it("reports a native module locked from a URL that holds an @", () => {
+    expect(lockfileProblems(lockfile(...ONE_REACT, "react-native-reanimated@git+https://git@github.com/x/reanimated.git#abc123"), SDK)).toEqual([
+      "react-native-reanimated@git+https://git@github.com/x/reanimated.git#abc123 is in the lockfile, but this Expo SDK expects 4.5.1",
+    ]);
+  });
+
   it("checks every locked version of a module, and reads a scoped name", () => {
     const text = lockfile(...ONE_REACT, "@expo/metro-runtime@57.0.16", "@expo/metro-runtime@58.0.0");
     expect(lockfileProblems(text, SDK)).toEqual(["@expo/metro-runtime@58.0.0 is in the lockfile, but this Expo SDK expects ~57.0.16"]);
@@ -110,6 +116,15 @@ describe("lockedVersions", () => {
       ["react", ["19.2.3"]],
       ["@expo/metro-runtime", ["57.0.16", "58.0.0"]],
       ["expo-router", ["57.0.24"]],
+    ]);
+  });
+
+  // A package locked from a git URL or a tarball: the version is the URL, and a URL can hold an "@".
+  it("splits a key at the first @ after the scope, not at the last", () => {
+    const locked = lockedVersions(lockfile("react-native-reanimated@git+https://git@github.com/x/reanimated.git#abc123", "@expo/metro-runtime@https://codeload.github.com/expo/expo/tar.gz/abc@def"));
+    expect([...locked]).toEqual([
+      ["react-native-reanimated", ["git+https://git@github.com/x/reanimated.git#abc123"]],
+      ["@expo/metro-runtime", ["https://codeload.github.com/expo/expo/tar.gz/abc@def"]],
     ]);
   });
 
