@@ -1,5 +1,7 @@
 # Phase 0: monorepo conversion Implementation Plan
 
+> **Executed on 2026-10-01.** The "Execution record" at the end of this file says what landed and every step that went differently. Where the plan and the record disagree, the record is what happened. Two steps must not be followed as written: Task 9 (the versions and the install route) and Task 14, Step 6 (requiring `ci-ok` would stop the nightly refresh).
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Turn today's single npm Next.js app into a pnpm monorepo outside OneDrive: the web app under `apps/web`, an Expo skeleton under `apps/mobile`, `features/` and `platform/` packages, a registry generator, a boundary scan, and path-filtered CI. A development build must run on the Android emulator, and the web app must not change what it does.
@@ -2946,3 +2948,95 @@ SDK 58 needs Node ^22.13, ^24.3 or 26+, and Node 24.14 is fine. It also rewrote 
 - [ ] **Step 5: the close-out PR** (docs only). In the spec's status line add "Phase 0 complete on <date> (PRs #…)", and in this plan add an "Execution record" section: each task's PR and SHA, the counts, the TypeScript route, and any step that went differently from the plan and why. Push it, open the PR and merge it. It is also the docs-only PR for Task 11, Step 3.
 
 - [ ] **Step 6 (owner): turn on branch protection if wanted.** Require `ci-ok` on `main`. This is optional, and it is a repository setting, so it is the owner's action.
+
+  > **Do not do this as written** (found in the whole-branch review, 2026-10-01). The refresh workflows push data commits straight to `main` with the default token, GitHub starts no workflow run for such a push, and a commit without the required check would be refused. See the execution record.
+
+---
+
+## Execution record
+
+Phase 0 was executed on 2026-10-01 (Singapore time; GitHub shows the first three merges late on 2026-09-30 UTC), task by task, each task reviewed before the next. It closed on Expo SDK 57: the owner decided on 2026-10-01 not to wait for SDK 58, so Task 13 becomes a follow-up PR. This section records what landed where and every step that went differently from the plan above. Where the two disagree, this section is what happened. The spec was amended in the same pull request as this record, for the close on SDK 57 (§0 "Mobile stack", §12 item 0, the status line) and for what each app may import (§0 "Feature zones").
+
+### What landed
+
+| Tasks | Pull request | Commits on `main` |
+|---|---|---|
+| 1 | none (local) | The checkout moved to `C:\dev\travel-super-app`. Baseline on `28789fa`: `tsc` clean; Vitest 167 files, 2766 passed and 1 expected fail; `next build` OK; Playwright 24 passed. |
+| 2, 3 | #45 | `c1ca6e0`, `da3a7af`, `a9a956e` |
+| 4, 5, 6 | #46 | `30de29d`, `e83a375`, `80bbc6d` |
+| 7, 8 | #47 | `4b8500b`, `c83e2d7`, `e417bb0`, `c69e4b5`, `3d21eb6` |
+| 9 | none (this machine) | Done by the agent at the owner's request. See "Task 9" below. |
+| 10, 11, 12 | #48 | `7d3e442`, `95cd965`, `0292c2b`, `4311697`, `8b73b99`, `73b750f`, `14b5b4d`, `6d475d3` |
+| review fixes | #49 | 33 commits, `0f951fd` to `f167401` |
+| 13 | not done | Expo's `latest` tag was 57.0.26 and `next` was 58.0.1 on 2026-10-01. |
+| 14 | this pull request | |
+
+### Counts at the close
+
+| Suite | Plan | Actual |
+|---|---|---|
+| `@tsa/web` (Vitest) | the baseline | 167 files, 2766 passed, 1 expected fail: unchanged through every PR, on React 19.2.3 since #48 |
+| `@tsa/web` (Playwright) | the baseline | 24 passed |
+| `@tsa/registry-gen` | 10 | 23 |
+| `@tsa/boundaries` | 132 | 562 |
+| `@tsa/mobile` (jest) | 1 | 1 |
+
+TypeScript route (decision D8): the mobile app keeps TypeScript 7.0.2. `tsc` passes over the real React Native 0.86.3 and Expo types, so the `~6.0.3` fallback was not needed.
+
+### The gate
+
+- **All checks green on `main`:** runs 36886118103 (`6d475d3`, the first run of the new workflow on `main`) and 36887361622 (`f167401`, all of phase 0's code): `changes`, `tools`, `web`, `e2e`, `mobile` and `ci-ok` all green.
+- **A Vercel preview builds from `apps/web`:** the heads of #46, #47, #48 and #49 have the `Vercel` status "Deployment has completed". The Vercel project's Root Directory is `apps/web`. Vercel also built every commit on `main` during phase 0, docs-only ones included: no Ignored Build Step skips by Root Directory, so when the website starts depending on `features/`, a change there will deploy.
+- **A development build runs on the Android emulator:** 2026-10-01, `pnpm --filter @tsa/mobile android`, BUILD SUCCESSFUL in 3m 14s, installed on a Pixel 8 emulator (Android 16, API 36, x86_64). The screen shows "Travel super app" and "0 apps registered": [`2026-10-01-phase0-emulator.png`](../evidence/2026-10-01-phase0-emulator.png).
+- **The path filter skips:** on the docs-only pull requests #43 (run 36887412860) and #44 (run 36887663633), and on their pushes to `main` (runs 36887616109 and 36887756404), `changes` and `ci-ok` succeeded and `tools`, `web`, `e2e` and `mobile` were skipped. A change to only the web app or only the mobile app has not run yet: every code pull request of phase 0 touched a shared path. Until one does, the per-group gates rest on the test that pins them (`tools/boundaries/src/ci.test.ts`).
+- **A scheduled refresh commits under `apps/web/`:** Refresh airports, run 36884697167 on 2026-10-01, committed `220f723`, which touches only `apps/web/data/airports.json` and `apps/web/data/airports-report.md`, and Vercel deployed it. Refresh cities, run 36886351520 the same day, committed `9d2be9e`: 23 files, all under `apps/web/data/` and `apps/web/public/cities/`. Two docs merges landed inside its window, and its `git pull --rebase` retry worked as designed. Vercel deployed that too.
+
+### What went differently, and why
+
+**Task 3.** `actions/setup-node@v5` starts a pnpm cache from `packageManager` on its own. The three refresh steps that install nothing got `package-manager-cache: false`.
+
+**Task 5.** `pnpm --filter X` exits 0 when X matches no package, so a renamed package would have turned a gate into a silent no-op. Every `--filter` used as a gate carries `--fail-if-no-match`. The placement guard in `refresh-cities.yml` gained six more "too deep" paths.
+
+**Task 6.** The Root Directory box in Vercel's settings has its own Save button; the first save did not take.
+
+**Tasks 7 and 8.** Review hardened both tools beyond the plan's code. Module names must become a valid, unique, non-reserved import name. The scan judges registry kinds per app, sees TypeScript's `import("x")` types, and has a test row for every member of the rule table.
+
+**Task 9.** Nothing in this task needed the owner's hands in the end, but it did not go as written.
+- Step 1 was not needed. The emulator reports "Windows Hypervisor Platform accelerator is operational" although the optional feature reads as disabled.
+- The versions to install are the ones React Native 0.86.3 names: **NDK 27.1.12297006**, not "the newest", and **Build-Tools 36.0.0**. The Gradle build downloads both by itself once the SDK licence is accepted. It does **not** download CMake 3.31.6: that has to be in the SDK before the build.
+- Smart App Control is on for this machine, and it blocks the unsigned downloader in Google's current command-line tools (cmdline-tools 23.0, where `sdkmanager` is a wrapper around the new `android` CLI). So Step 3's `sdkmanager` route does not work here. The system image and CMake were unpacked from Google's own zips, with their checksums verified against the SDK manifest, and the virtual device was written by hand (`Pixel_8_API_36`).
+- JDK 17 is the Microsoft build's zip, unpacked to `%LOCALAPPDATA%\Programs\Microsoft\jdk-17.0.20.1`. Step 5's permanent environment variables were not set: the build command gets `JAVA_HOME` and `ANDROID_HOME` for itself.
+
+**Task 10.**
+- `expo-router` depends on `react-native-drawer-layout`, whose two native peers are required, so pnpm installed the newest gesture-handler, Reanimated and worklets, at versions SDK 57 does not expect, and a second `react-dom`. `expo install --check` could not see them. `pnpm-workspace.yaml` gained `packageExtensions` (the two peers are optional) and `overrides` (`react-dom` follows the catalog). The lockfile was resolved again from `main`'s, because pnpm keeps an optional peer that the lockfile it starts from already holds.
+- `@testing-library/react-native` 14 made `render` async, and its peer `test-renderer` is pinned to `~1.2.0`, the line that pairs with React 19.2. It moves to `~1.3.0` with React 19.3.
+- The template's licence file and icons were deleted. `userInterfaceStyle` was removed on the owner's decision: it does nothing on Android without `expo-system-ui`.
+- The first `expo run:android` rewrote `tsconfig.json` (`expo-env.d.ts` left `include`). The CLI's version is committed.
+- Step 12 expected 132 tests; the suite had 226 by then.
+
+**Task 11.** The workflow differs from the YAML above.
+- Every `--filter` carries `--fail-if-no-match`.
+- The `tools` job excludes the two apps instead of naming `./tools/*`, so `features/` and `platform/` join the gate the moment they define a `typecheck` or `test` script.
+- `reference/**` is already in the `shared` path group.
+
+**Task 12.** The first build failed only on the missing CMake. With CMake in place it passed as the pnpm workspace is: `nodeLinker: hoisted` was not needed. The development client shows its own menu on first launch, which has to be dismissed before the app's screen is visible.
+
+**Task 14, Step 6 must not be followed as written.** The refresh workflows push data commits straight to `main` with the default token, and GitHub starts no workflow run for such a push. With `ci-ok` required on `main`, those pushes would be refused. Requiring it needs the refresh jobs to push through an identity that may bypass the rule, or to open pull requests, whose runs GitHub holds until someone with write access approves them.
+
+**The whole-branch review ran before Task 12**, while the toolchain was missing, and its fixes are #49. It found that the boundary scan could be walked around (folders skipped by name at any depth, a path alias spelled like a package, native packages the name tests missed, `import.meta.glob`, relative paths past the `exports` maps). Three fix rounds and two further reviews later the scan refuses each of those, and the repo has guards it did not have: every governed file is scanned, the CI path filter and job gates are pinned by a test, and the lockfile is checked for one React and for the SDK's native versions. #49 also changed the workflow Task 11 wrote: both third-party actions are pinned to commits, the mobile job runs the package's `test` script instead of `exec jest --ci`, `actions/cache` moved to v6 and `actions/upload-artifact` to v7, and one step runs the repo guards by name. Fable's final pass over the whole phase then found nothing to change in the code, and corrected this record.
+
+**Scheduled refreshes start late.** The workflows say 08:23 and 08:53 UTC; GitHub starts them between about 14:00 and 17:00 UTC.
+
+### Left for later phases
+
+- **SDK 58 (Task 13)** when Expo marks it stable: `expo install expo@^58.0.0 --fix`, the catalog's three pins, `test-renderer ~1.3.0`. The lockfile test will check the SDK's versions.
+- **Phase 1:** the rule for `@better-auth/expo/client` (the phone's entry; the package root is allowed on the server); `db/migrations/` and a root `biome.json` need a line in the CI path filter; a per-zone tsconfig that declares `paths` must be registered in `tools/boundaries/src/repo.test.ts`; the better-auth peer warning goes with 1.7.6.
+- **The phase that sends notifications:** `expo-server-sdk` is refused in server code by the `expo-<x>` name rule.
+- **Phase 3:** platform-specific files (`Button.ios.tsx` imported as `./Button`) fail the scan as "cannot resolve"; when the shell adds gestures or Reanimated, add both with `expo install` and only then remove the `packageExtensions` block.
+- **2026-10-19:** `ubuntu-latest` becomes Ubuntu 26. Watch the `e2e` job's `playwright install --with-deps`.
+- **Small things the reviews left open, none of them blocking:**
+  - `ci.yml` has no workflow-level `permissions:`; only the `changes` job narrows the token. `contents: read` at the top would do.
+  - Every CI, Vercel and refresh install now pulls the React Native packages. Filtered installs are an option.
+  - The mobile home test covers only the empty registry, so a hard-coded "0 apps registered" would pass it. The first feature will fail it loudly.
+  - `refuseUnresolved: true` in `tools/boundaries/src/repo.test.ts` is pinned by no test, because the real tree has no unresolved value import. Some unit rows in `ci.test.ts` are loose. `import.meta.webpackContext` is reported with the `import.meta.glob` wording. A workspace manifest's `module` field and conditional `imports` are not guarded.
+  - `apps/web/playwright.config.ts` says CI passes `BETTER_AUTH_SECRET` as an `env:` entry; it never did. About 29 comment lines across the web app still say `npm` or `npx`. `apps/web/.vercelignore` is inert.

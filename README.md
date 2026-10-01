@@ -110,6 +110,27 @@ pnpm build                     # what CI runs after the tests
 no-accounts mode, with the login wall off and everything open. Fill the secret
 in to exercise accounts and the wall.
 
+### The mobile app
+
+`apps/mobile` is an Expo development build, so running it needs the Android
+toolchain: JDK 17, and an Android SDK with NDK 27.1.12297006, Build-Tools
+36.0.0, CMake 3.31.6 and an API 36 system image. The Gradle build downloads
+the NDK and Build-Tools itself; CMake 3.31.6 must already be in the SDK. The
+build reads `JAVA_HOME` and `ANDROID_HOME` from the shell it runs in
+(PowerShell shown):
+
+```powershell
+$env:JAVA_HOME = "$env:LOCALAPPDATA\Programs\Microsoft\jdk-17.0.20.1"   # wherever your JDK 17 is
+$env:ANDROID_HOME = "$env:LOCALAPPDATA\Android\Sdk"
+& "$env:ANDROID_HOME\emulator\emulator.exe" -list-avds                 # the virtual devices you have
+Start-Process "$env:ANDROID_HOME\emulator\emulator.exe" -ArgumentList "-avd", "Pixel_8_API_36"   # opens the emulator in its own window
+pnpm --filter @tsa/mobile android    # builds, installs and opens the app, then serves it from Metro
+pnpm --filter @tsa/mobile test       # jest, no toolchain needed
+```
+
+The first build takes several minutes. The first launch shows the development
+client's own menu: dismiss it to see the app.
+
 ### Data, and how it refreshes
 
 Every artifact the app reads is committed, so a clone runs without any ingest.
