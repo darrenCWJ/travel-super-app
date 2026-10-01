@@ -36,7 +36,7 @@
  *
  * Inline as `CIP_ACCEPT_LANGUAGE_CHANGES=IQ,MR node ...` is bash / Git Bash
  * syntax. In PowerShell, set and clear it around the one command instead of
- * exporting it:
+ * exporting it (with apps/web as the working directory, in either shell):
  *
  *   try { $env:CIP_ACCEPT_LANGUAGE_CHANGES = 'IQ,MR'; node scripts/ingest-country-facts.mjs } finally { Remove-Item Env:CIP_ACCEPT_LANGUAGE_CHANGES }
  */

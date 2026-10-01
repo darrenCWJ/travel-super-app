@@ -63,7 +63,7 @@
  * `license` field stamped into the artifact envelope, and the `## Attribution`
  * section of the report.
  *
- * Usage: node scripts/ingest-country-facts.mjs
+ * Usage, with apps/web as the working directory: node scripts/ingest-country-facts.mjs
  *
  * To write a language change a human has reviewed — the nightly job never
  * does; see scripts/country-facts/languages.mjs:
