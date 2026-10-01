@@ -216,6 +216,29 @@ describe("scanRepo edge cases", () => {
     });
   });
 
+  // A test is exempt from the package rules, so a test file that re-exports node:fs is clean, and the
+  // app's code importing it would be a way round them. Only the app's code is refused: a test may
+  // import the app's tests and its code.
+  it("refuses an app's code that imports one of the app's own test files, wherever the test sits", () => {
+    const files = {
+      "apps/mobile/src/barrel.test.ts": 'export { readFileSync } from "node:fs";\n',
+      "apps/mobile/src/app/index.tsx": 'import { readFileSync } from "../barrel.test";\nexport default readFileSync;\n',
+      "apps/mobile/tests/setup.ts": CODE,
+      "apps/mobile/src/b.tsx": 'import "../tests/setup";\n',
+      "apps/web/e2e/helper.ts": CODE,
+      "apps/web/lib/x.ts": 'import "../e2e/helper";\n',
+      "apps/mobile/tests/home.test.tsx": 'import "../src/app/index";\nimport "../src/barrel.test";\nimport "./setup";\n',
+      "apps/web/e2e/flow.ts": 'import "../lib/x";\nimport "./helper";\n',
+    };
+    withRepo(files, (root) => {
+      expect(scanRepo({ root }).violations.map((v) => [v.file, v.line, v.reason])).toEqual([
+        ["apps/mobile/src/app/index.tsx", 1, "apps/mobile may not import its own test code"],
+        ["apps/mobile/src/b.tsx", 1, "apps/mobile may not import its own test code"],
+        ["apps/web/lib/x.ts", 1, "apps/web may not import its own test code"],
+      ]);
+    });
+  });
+
   it("reads a package.json saved with a byte-order mark", () => {
     const manifest = `\uFEFF${JSON.stringify({ name: "@fx/features", private: true })}`;
     withRepo({ "features/package.json": manifest, "features/money/core/ok.ts": "export const ok = 1;\n" }, (root) => {

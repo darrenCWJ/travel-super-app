@@ -112,7 +112,12 @@ function checkPackage(from: Zone, to: Extract<Target, { kind: "package" | "built
 
 function checkZone(from: Zone, to: Zone): string | null {
   const sameOwner = from.layer === to.layer && from.owner === to.owner;
-  if (to.layer === "app") return from.layer === "app" && sameOwner ? null : `nothing imports into apps/${to.owner}`;
+  if (to.layer === "app") {
+    if (!sameOwner) return `nothing imports into apps/${to.owner}`; // only the app's own files import into it
+    // A test is exempt from the package rules (checkPackage), so the app's own code reaching one would
+    // be a way round them. A test may import the app's tests and the app's code.
+    return to.part === "test" && from.part !== "test" ? `apps/${from.owner} may not import its own test code` : null;
+  }
   if (to.part === "registry") return checkRegistry(from, to);
   // Generated code: it imports every feature's parts by design, and only the apps import it.
   if (from.part === "registry") return null;

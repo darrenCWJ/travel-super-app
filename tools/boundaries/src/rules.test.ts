@@ -165,7 +165,15 @@ describe("checkEdge: registry and apps", () => {
     ["mobile app test → feature server", mobileTest, to("feature", "money", "server"), false],
     ["mobile app test → server registry", mobileTest, registry("platform", "server"), false],
     ["mobile app test → mobile registry", mobileTest, registry("feature", "mobile"), true],
-    ["web app → its own test helper", web, to("app", "web", "test"), true],
+    // An app's own code does not import its tests: a test is exempt from the package rules, so a test
+    // file could re-export what the app may not use. A test may import the app's tests and its code.
+    ["web app → its own test helper", web, to("app", "web", "test"), false],
+    ["mobile app → its own test helper", mobile, to("app", "mobile", "test"), false],
+    ["web app → the mobile app's test helper", web, to("app", "mobile", "test"), false],
+    ["web app test → its own test helper", webTest, to("app", "web", "test"), true],
+    ["mobile app test → its own test helper", mobileTest, to("app", "mobile", "test"), true],
+    ["mobile app test → the mobile app", mobileTest, to("app", "mobile", null), true],
+    ["web app test → the mobile app's test helper", webTest, to("app", "mobile", "test"), false],
   ])("%s", (_name, from, target, ok) => {
     expect(checkEdge(from, target) === null).toBe(ok);
   });
@@ -331,6 +339,9 @@ describe("checkEdge: what a refusal says", () => {
     ["a part importing a banned package", moneyCore, pkg("react"), "core code may not import react"],
     ["a part importing a package whose manifest requires react-native", moneyWeb, nativePkg("@shopify/flash-list"), "web code may not import @shopify/flash-list"],
     ["a part importing a part it may not", moneyClient, to("feature", "money", "server"), "client code may not import server code"],
+    ["the web app importing its own test code", web, to("app", "web", "test"), "apps/web may not import its own test code"],
+    ["the phone importing its own test code", mobile, to("app", "mobile", "test"), "apps/mobile may not import its own test code"],
+    ["an app importing another app's test code", web, to("app", "mobile", "test"), "nothing imports into apps/mobile"],
   ])("%s", (_name, from, target, reason) => {
     expect(checkEdge(from, target)).toBe(reason);
   });
