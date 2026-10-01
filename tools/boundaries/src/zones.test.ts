@@ -23,8 +23,16 @@ describe("classify", () => {
     ["reference/countries/core/facts.ts", { layer: "reference", owner: "countries", part: "core" }],
     ["apps/web/lib/itinerary.ts", { layer: "app", owner: "web", part: null }],
     ["apps/mobile/src/app/index.tsx", { layer: "app", owner: "mobile", part: null }],
+    ["apps/web/lib/itinerary.test.ts", { layer: "app", owner: "web", part: "test" }],
+    ["apps/web/e2e/auth.setup.ts", { layer: "app", owner: "web", part: "test" }],
+    ["apps/mobile/tests/setup.ts", { layer: "app", owner: "mobile", part: "test" }],
   ])("%s", (rel, zone) => {
     expect(classify(rel)).toEqual(zone);
+  });
+
+  it("takes tests/ and e2e/ for an app's tests only directly inside the app folder", () => {
+    expect(classify("apps/web/lib/tests/helper.ts")).toEqual({ layer: "app", owner: "web", part: null });
+    expect(classify("apps/mobile/src/e2e/steps.ts")).toEqual({ layer: "app", owner: "mobile", part: null });
   });
 
   it("gives a layered file outside a part folder no part, so the scan can report it", () => {

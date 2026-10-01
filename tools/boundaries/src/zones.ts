@@ -6,7 +6,7 @@ export interface Zone {
   layer: Layer;
   /** feature or module name ("money", "sync", "countries"), or the app name ("web", "mobile") */
   owner: string;
-  /** null for app files and for layered files outside a known part folder */
+  /** null for an app's files other than its tests, and for layered files outside a known part folder */
   part: Part | null;
   /** Set only for generated registry files: the file's base name ("manifests", "client", "server", "web", "mobile"). */
   kind?: string;
@@ -28,12 +28,15 @@ export const TEST_FILE = /\.(test|spec)\.[cm]?[jt]sx?$/;
  */
 export function classify(rel: string): Zone | null {
   const seg = rel.split("/");
-  if (seg[0] === "apps" && seg.length >= 3) return { layer: "app", owner: seg[1], part: null };
+  // A test file, or a file under tests/ or e2e/ directly inside the app, feature or module folder.
+  const isTest = TEST_FILE.test(rel) || TEST_DIRS.has(seg[2]);
+  // An app has no part folders: its tests are the one part it has.
+  if (seg[0] === "apps" && seg.length >= 3) return { layer: "app", owner: seg[1], part: isTest ? "test" : null };
   const layer = LAYERS[seg[0]];
   if (layer === undefined || seg.length < 3) return null;
   const owner = seg[1];
   if (owner === "_registry" && REGISTRY_LAYERS.has(layer)) return { layer, owner, part: "registry", kind: seg[2].replace(/\.[^.]+$/, "") };
-  if (TEST_FILE.test(rel) || TEST_DIRS.has(seg[2])) return { layer, owner, part: "test" };
+  if (isTest) return { layer, owner, part: "test" };
   if (layer === "feature" && seg.length === 3 && /^manifest\.[cm]?[jt]s$/.test(seg[2])) {
     return { layer, owner, part: "manifest" };
   }

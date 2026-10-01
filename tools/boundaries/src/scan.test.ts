@@ -202,6 +202,20 @@ describe("scanRepo edge cases", () => {
     });
   });
 
+  it("takes an app's test files, and its tests/ and e2e/ folders, for tests: any package, any built-in, a computed specifier", () => {
+    const files = {
+      "apps/mobile/tests/x.test.tsx": 'import { readFileSync } from "node:fs";\nimport "react-dom";\nexport default readFileSync;\n',
+      "apps/web/e2e/helper.ts": "export const load = (name: string) => import(name);\n",
+      "apps/mobile/src/a.test.tsx": 'import "node:path";\n',
+      "apps/mobile/src/a.tsx": 'import "node:path";\n',
+    };
+    withRepo(files, (root) => {
+      expect(scanRepo({ root }).violations.map((v) => [v.file, v.reason])).toEqual([
+        ["apps/mobile/src/a.tsx", "apps/mobile may not use Node built-in node:path"],
+      ]);
+    });
+  });
+
   it("reads a package.json saved with a byte-order mark", () => {
     const manifest = `\uFEFF${JSON.stringify({ name: "@fx/features", private: true })}`;
     withRepo({ "features/package.json": manifest, "features/money/core/ok.ts": "export const ok = 1;\n" }, (root) => {

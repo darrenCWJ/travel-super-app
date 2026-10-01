@@ -25,6 +25,8 @@ const syncDb = z("platform", "sync", "db");
 const countriesCore = z("reference", "countries", "core");
 const web = z("app", "web", null);
 const mobile = z("app", "mobile", null);
+const webTest = z("app", "web", "test");
+const mobileTest = z("app", "mobile", "test");
 
 // Every rule has a case it must refuse and a neighbouring case it must allow. Beyond that, each cell of
 // the part and registry tables, each banned-package test and each built-ins flag has a row of its own,
@@ -153,6 +155,17 @@ describe("checkEdge: registry and apps", () => {
     ["mobile app → feature test helper", mobile, to("feature", "money", "test"), false],
     ["app → manifest", web, to("feature", "money", "manifest"), false],
     ["mobile app → manifest", mobile, to("feature", "money", "manifest"), false],
+    // An app's test is held to the app's own zone rules.
+    ["web app test → feature server", webTest, to("feature", "money", "server"), true],
+    ["web app test → feature db", webTest, to("feature", "money", "db"), false],
+    ["web app test → mobile registry", webTest, registry("feature", "mobile"), false],
+    ["web app test → the web app", webTest, to("app", "web", null), true],
+    ["web app test → the mobile app", webTest, to("app", "mobile", null), false],
+    ["mobile app test → feature mobile", mobileTest, to("feature", "money", "mobile"), true],
+    ["mobile app test → feature server", mobileTest, to("feature", "money", "server"), false],
+    ["mobile app test → server registry", mobileTest, registry("platform", "server"), false],
+    ["mobile app test → mobile registry", mobileTest, registry("feature", "mobile"), true],
+    ["web app → its own test helper", web, to("app", "web", "test"), true],
   ])("%s", (_name, from, target, ok) => {
     expect(checkEdge(from, target) === null).toBe(ok);
   });
@@ -220,6 +233,15 @@ describe("checkEdge: packages", () => {
     ["mobile app → next", mobile, pkg("next"), false],
     ["mobile app → drizzle-orm", mobile, pkg("drizzle-orm"), false],
     ["mobile app → node:fs", mobile, builtin("node:fs"), false],
+    // The package rules do not apply to a test, whatever the layer: an app's tests included.
+    ["platform test → react-native", z("platform", "sync", "test"), pkg("react-native"), true],
+    ["reference test → node:fs", z("reference", "countries", "test"), builtin("node:fs"), true],
+    ["web app test → react-native", webTest, pkg("react-native"), true],
+    ["web app test → expo", webTest, pkg("expo"), true],
+    ["mobile app test → node:fs", mobileTest, builtin("node:fs"), true],
+    ["mobile app test → react-dom", mobileTest, pkg("react-dom"), true],
+    ["mobile app test → next", mobileTest, pkg("next"), true],
+    ["mobile app test → drizzle-orm", mobileTest, pkg("drizzle-orm"), true],
   ])("%s", (_name, from, target, ok) => {
     expect(checkEdge(from, target) === null).toBe(ok);
   });
@@ -264,6 +286,7 @@ describe("checkEdge: native packages by manifest", () => {
     ["mobile → native package", moneyMobile, nativePkg("@shopify/flash-list"), true],
     ["mobile app → native package", mobile, nativePkg("@shopify/flash-list"), true],
     ["test → native package", moneyTest, nativePkg("@shopify/flash-list"), true],
+    ["web app test → native package", webTest, nativePkg("@shopify/flash-list"), true],
     ["web → the same name, manifest not native", moneyWeb, pkg("@shopify/flash-list"), true],
   ])("%s", (_name, from, target, ok) => {
     expect(checkEdge(from, target) === null).toBe(ok);
@@ -286,6 +309,8 @@ describe("checkEdge: react-native-web", () => {
     ["a file in no part folder", z("feature", "money", null)],
     ["the web app", web],
     ["the mobile app", mobile],
+    ["a web app test", webTest],
+    ["a mobile app test", mobileTest],
   ])("is refused from %s", (_name, from) => {
     expect(checkEdge(from, pkg("react-native-web"))).toBe("nothing uses react-native-web (spec §0)");
   });
