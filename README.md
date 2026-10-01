@@ -122,7 +122,7 @@ request. Script and data paths below are relative to `apps/web`.
 | Refresh airports | daily, 08:23 UTC | `scripts/ingest-airports.mjs` | OurAirports (public domain) |
 | Refresh cities | daily, 08:53 UTC, three jobs | `ingest-cities.mjs` → `enrich-cities.mjs` → `ingest-country-facts.mjs` | GeoNames cities500 (CC BY 4.0) · Wikidata (CC0) + Wikipedia summaries (CC BY-SA) |
 | Refresh climate | by hand (`workflow_dispatch`) | `scripts/ingest-climate.mjs` | CHELSA V2.1 1981–2010 (CC0), ~10.7 GB of rasters |
-| CI | every push and PR; each job runs only when its paths changed | the web app's type-check, Vitest suite, `next build` and Playwright; the tools' suites; the mobile app's type-check, jest and `expo export` | — |
+| CI | every push and PR; a job is skipped when nothing it checks has changed | the web app's type-check, Vitest suite, `next build` and Playwright; the tools' type-check and suites; the mobile app's type-check, jest and `expo export` | — |
 
 The province, projection, globe and world topologies are built from Natural
 Earth (public domain) by `scripts/build-*.mjs` when the geometry changes, and
@@ -152,8 +152,8 @@ apps/web/               the Next.js app, package @tsa/web; everything below is r
   e2e/                  Playwright specs and the saved session (auth.setup.ts)
   test/                 shared test harnesses that must live outside the contract-scanned roots
 apps/mobile/            the Expo app, package @tsa/mobile: a one-screen skeleton until the shell arrives
-features/               package @tsa/features: no feature yet; _registry/ is generated on install, never committed
-platform/               package @tsa/platform: no module yet; _registry/ is generated on install, never committed
+features/               package @tsa/features: one folder per feature; _registry/ is generated on install, never committed
+platform/               package @tsa/platform: one folder per shared module; _registry/ is generated on install, never committed
 tools/
   registry-gen/         writes the generated registries; the root postinstall runs it
   boundaries/           the import scan that enforces the zone rules, as a test in its own suite

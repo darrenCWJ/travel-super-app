@@ -142,7 +142,7 @@ jobs:
     # Expected wall clock: ~26 min sampling (measured, 1,557 s, everything
     # cached) + ~37 min for the cold 10.65 GB download (measured at 4.81 MB/s
     # from the author's host — a GitHub runner may be faster or slower) +
-    # ~3 min more for `pnpm install` and `pnpm test` ≈ 66 min. 150 is roughly
+    # ~3 min more for `pnpm install` and the web suite ≈ 66 min. 150 is roughly
     # double that: slack for a slower runner or host, while a genuinely stalled
     # download still goes red well short of the 6-hour default.
     timeout-minutes: 150
