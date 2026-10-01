@@ -14,6 +14,21 @@ describe("trackedFiles", () => {
     expect(files.filter((path) => path.includes("\\"))).toEqual([]);
   });
 
+  // What a developer's machine has between deleting a file and staging the deletion.
+  it("leaves out a tracked file that is gone from the disk", () => {
+    const repo = mkdtempSync(join(tmpdir(), "boundaries-deleted-"));
+    try {
+      execFileSync("git", ["init", "--quiet"], { cwd: repo });
+      writeFileSync(join(repo, "kept.ts"), "export {};\n");
+      writeFileSync(join(repo, "deleted.ts"), "export {};\n");
+      execFileSync("git", ["add", "kept.ts", "deleted.ts"], { cwd: repo, stdio: "ignore" });
+      rmSync(join(repo, "deleted.ts"));
+      expect(trackedFiles(repo)).toEqual(["kept.ts"]);
+    } finally {
+      rmSync(repo, { recursive: true, force: true });
+    }
+  });
+
   it("throws where git tracks nothing, so that a guard built on the list cannot pass on an empty one", () => {
     const empty = mkdtempSync(join(tmpdir(), "boundaries-untracked-"));
     try {
