@@ -5,9 +5,11 @@
 # counts as success, whereas a workflow skipped by `paths:` would leave a
 # required check pending forever. EAS never runs here.
 #
-# Every --filter that names a package carries --fail-if-no-match: pnpm exits 0
-# when a filter matches no package ("No projects matched the filters"), so a
-# rename or a typo would turn the step into a silent no-op.
+# Every --filter carries --fail-if-no-match. pnpm exits 0 when a filter selects
+# no package ("No projects matched the filters"), so without the flag a rename
+# or a typo would turn a step that names its package into a silent no-op. On
+# the `tools` job's excluding filters the flag is inert: it is there so the
+# rule has no exception to remember.
 name: CI
 
 on:
@@ -30,10 +32,15 @@ jobs:
       - uses: dorny/paths-filter@v4
         id: filter
         with:
+          # A path in no group runs no job, and ci-ok stays green, so a new
+          # top-level code directory or a new app needs a line here.
+          # reference/ does not exist yet (phase 4): it is listed so that its
+          # first pull request is checked.
           filters: |
             shared:
               - 'features/**'
               - 'platform/**'
+              - 'reference/**'
               - 'tools/**'
               - 'package.json'
               - 'pnpm-workspace.yaml'
@@ -58,11 +65,12 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      # Every workspace package that is not an app: the two tools today, and
-      # features/ and platform/ from the moment they define a `typecheck` or a
-      # `test` script. The filters exclude the apps instead of naming the rest,
-      # so a new package joins the gate by defining a script, and renaming one
-      # cannot drop it.
+      # Every workspace package except the two apps, which are excluded by
+      # name: the two tools today, and features/ and platform/ from the moment
+      # they define a `typecheck` or a `test` script. Excluding instead of
+      # naming means a new package joins the gate by defining a script, and
+      # renaming one cannot drop it. A new or renamed app would be swept in
+      # here too: give it its own job and exclude it by name.
       - run: pnpm --filter "!@tsa/web" --filter "!@tsa/mobile" --fail-if-no-match typecheck
       - run: pnpm --filter "!@tsa/web" --filter "!@tsa/mobile" --fail-if-no-match test
 
@@ -124,6 +132,8 @@ jobs:
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ steps.pw.outputs.version }}
+      # Playwright is a devDependency of @tsa/web, so its bin does not resolve at
+      # the workspace root: both commands reach it through --filter ... exec.
       # `--with-deps` pulls the system libraries the browser needs on
       # ubuntu-latest. Still run on a cache hit, because the cache restores the
       # browser binaries and not the apt packages beside them.
