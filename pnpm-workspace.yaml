@@ -6,7 +6,7 @@ packages:
   - platform
   - tools/*
 
-# Versions shared by more than one package. A package asks for one with
+# Versions set once for the whole workspace. A package asks for one with
 # "name": "catalog:". react, react-dom and react-native are the Expo SDK's exact
 # pins (its bundledNativeModules.json): one React for the whole workspace.
 catalog:
@@ -23,7 +23,9 @@ catalog:
 # autolinking would compile them, with react-native-worklets, into the Android
 # build, where `expo install --check` cannot see them. The skeleton has no
 # drawer, so the peers are optional here. When the shell needs gestures or
-# Reanimated (phase 3), add them with `expo install` and delete this block.
+# Reanimated (phase 3), add both with `expo install`. Remove this block only
+# once both are direct dependencies of the mobile app: with one missing, pnpm
+# installs the newest of it again.
 packageExtensions:
   react-native-drawer-layout:
     peerDependenciesMeta:
@@ -34,9 +36,10 @@ packageExtensions:
 
 # One react-dom for the whole workspace, including the copy pnpm installs on its
 # own for a package's peer: without this the mobile app's graph gets the newest
-# react-dom beside the catalog's react. react needs no entry while every package
-# that depends on it says "catalog:"; an entry would also rewrite every react
-# peer range in the lockfile, which would hide a real mismatch.
+# react-dom beside the catalog's react. The cost: pnpm rewrites every package's
+# react-dom peer range to this pin, so it no longer warns when a package wants
+# a different react-dom. react has no entry, so its peer warnings still fire;
+# it needs none while every package that depends on it says "catalog:".
 overrides:
   react-dom: "catalog:"
 
