@@ -124,12 +124,24 @@ describe("matchesPattern", () => {
     expect(matchesPattern(pattern, path)).toBe(matched);
   });
 
-  it.each(["**/*.md", "apps/*/package.json", "src/**/*.ts", "!docs/**", "apps/web/*", "{a,b}/**", "docs/?.md"])(
-    "refuses %s, a shape it does not understand",
-    (pattern) => {
-      expect(() => matchesPattern(pattern, "docs/x.md")).toThrow(`unsupported pattern "${pattern}"`);
-    },
-  );
+  it.each([
+    "**/*.md",
+    "apps/*/package.json",
+    "src/**/*.ts",
+    "!docs/**",
+    "apps/web/*",
+    "{a,b}/**",
+    "docs/?.md",
+    // A bracket expression, then each bracket and each brace on its own: every character the check looks for has a row.
+    "docs/[ab].md",
+    "[ab]/**",
+    "docs/[.md",
+    "docs/].md",
+    "docs/{.md",
+    "docs/}.md",
+  ])("refuses %s, a shape it does not understand", (pattern) => {
+    expect(() => matchesPattern(pattern, "docs/x.md")).toThrow(`unsupported pattern "${pattern}"`);
+  });
 });
 
 describe("unaccountedFiles", () => {
