@@ -163,7 +163,11 @@ export function scanRepo(options: ScanOptions): ScanResult {
       return `cannot resolve ${specifier}: ${result.error ?? "unknown error"}`;
     }
     if (name === null) return `${specifier} resolves outside the repo`;
-    return { target: { kind: "package", name, native: installed && requiresReactNative(name, result.path, manifestIn) }, rel: null };
+    // What is installed says what it is, in its own manifest: an npm alias or a tsconfig alias can
+    // spell any package anyhow. With no manifest to read, the spelling stands.
+    const manifest = installed ? installedManifest(result.path, manifestIn) : null;
+    if (manifest === null) return { target: { kind: "package", name }, rel: null };
+    return { target: { kind: "package", name: manifest.name, native: requiresReactNative(manifest) }, rel: null };
   }
 }
 
@@ -180,6 +184,7 @@ interface Manifest {
   peerDependencies?: Record<string, string>;
   peerDependenciesMeta?: Record<string, { optional?: boolean }>;
 }
+type NamedManifest = Manifest & { name: string };
 
 /** A folder's package.json, or null when it has none. */
 function readManifest(dir: string): Manifest | null {
@@ -189,20 +194,30 @@ function readManifest(dir: string): Manifest | null {
 }
 
 /**
- * Whether the installed package `name` cannot work without React Native: its own manifest lists
- * react-native as a dependency, or as a peer that is not marked optional. `resolved` is the file the
- * import landed on, somewhere under a node_modules folder; the package's manifest is the first one
- * above that file which carries the name, so a nested package.json holding only {"type": "module"}
- * is passed over. With no such manifest the answer is false, and the package is judged by its name.
+ * The manifest of the installed package that `resolved` belongs to. `resolved` is the file an import
+ * landed on, somewhere under a node_modules folder; the manifest is the first one above that file
+ * that has a name, so a nested package.json holding only {"type": "module"} is passed over. Null
+ * when no folder up to node_modules has one.
  */
-function requiresReactNative(name: string, resolved: string, manifestIn: (dir: string) => Manifest | null): boolean {
+function installedManifest(resolved: string, manifestIn: (dir: string) => Manifest | null): NamedManifest | null {
   for (let dir = dirname(resolved); basename(dir) !== "node_modules"; dir = dirname(dir)) {
     const manifest = manifestIn(dir);
-    if (manifest?.name !== name) continue;
-    if (manifest.dependencies?.["react-native"] !== undefined) return true;
-    return manifest.peerDependencies?.["react-native"] !== undefined && manifest.peerDependenciesMeta?.["react-native"]?.optional !== true;
+    if (hasName(manifest)) return manifest;
   }
-  return false;
+  return null;
+}
+
+function hasName(manifest: Manifest | null): manifest is NamedManifest {
+  return manifest?.name !== undefined;
+}
+
+/**
+ * Whether a package cannot work without React Native: its manifest lists react-native as a
+ * dependency, or as a peer that is not marked optional.
+ */
+function requiresReactNative(manifest: Manifest): boolean {
+  if (manifest.dependencies?.["react-native"] !== undefined) return true;
+  return manifest.peerDependencies?.["react-native"] !== undefined && manifest.peerDependenciesMeta?.["react-native"]?.optional !== true;
 }
 
 /** `read`, remembering its answer for each key. */

@@ -342,7 +342,7 @@ describe("scanRepo: a package whose own manifest requires react-native", () => {
     });
   });
 
-  it("reads the manifest that carries the package's name, past a nested one that does not", () => {
+  it("reads the first manifest above the file that has a name, past a nested one that has none", () => {
     const files = {
       ...installed({ peerDependencies: { "react-native": "*" } }, "dist/index.js"),
       [`node_modules/${NAME}/dist/package.json`]: JSON.stringify({ type: "commonjs" }),
@@ -350,6 +350,73 @@ describe("scanRepo: a package whose own manifest requires react-native", () => {
     };
     withRepo(files, (root) => {
       expect(found(root)).toEqual(refused);
+    });
+  });
+});
+
+// The spelling of a specifier is not the package: an npm alias or a tsconfig alias gives any
+// package any name. What is installed says what it is, in its own manifest.
+describe("scanRepo: an installed package is judged by the name in its own manifest", () => {
+  /** A package installed in node_modules/<folder>: its manifest (`fields`) and its entry file. */
+  const installedAs = (folder: string, fields: Record<string, unknown>) => ({
+    [`node_modules/${folder}/package.json`]: JSON.stringify({ main: "index.js", ...fields }),
+    [`node_modules/${folder}/index.js`]: "module.exports = {};\n",
+  });
+  const found = (root: string, tsconfigs?: Record<string, string>) =>
+    scanRepo({ root, tsconfigs }).violations.map((v) => [v.file, v.specifier, v.reason]);
+
+  it("reads through an npm alias: the name rules, the react-native-web refusal and the manifest rule", () => {
+    const files = {
+      ...installedAs("rn", { name: "react-native" }),
+      ...installedAs("rnw", { name: "react-native-web" }),
+      ...installedAs("list", { name: "@shopify/flash-list", peerDependencies: { "react-native": "*" } }),
+      "features/money/web/a.tsx": 'import "rn";\nimport "rnw";\nimport "list";\n',
+      "features/money/core/b.ts": 'import "rn";\n',
+      "apps/mobile/src/c.tsx": 'import "rn";\nimport "rnw";\nimport "list";\n',
+    };
+    withRepo(files, (root) => {
+      expect(found(root)).toEqual([
+        ["apps/mobile/src/c.tsx", "rnw", "nothing uses react-native-web (spec §0)"],
+        ["features/money/core/b.ts", "rn", "core code may not import react-native"],
+        ["features/money/web/a.tsx", "rn", "web code may not import react-native"],
+        ["features/money/web/a.tsx", "rnw", "nothing uses react-native-web (spec §0)"],
+        ["features/money/web/a.tsx", "list", "web code may not import @shopify/flash-list"],
+      ]);
+    });
+  });
+
+  it("reads through a tsconfig alias that points into node_modules", () => {
+    const files = {
+      ...installedAs("react-native", { name: "react-native" }),
+      "features/tsconfig.json": JSON.stringify({ compilerOptions: { paths: { ui: ["../node_modules/react-native"], "ui/*": ["../node_modules/react-native/*"] } } }),
+      "features/money/web/a.tsx": 'import "ui";\n',
+      "features/money/core/b.ts": 'import "ui/index.js";\n',
+      "features/money/mobile/c.tsx": 'import "ui";\n',
+    };
+    withRepo(files, (root) => {
+      expect(found(root, { features: "features/tsconfig.json" })).toEqual([
+        ["features/money/core/b.ts", "ui/index.js", "core code may not import react-native"],
+        ["features/money/web/a.tsx", "ui", "web code may not import react-native"],
+      ]);
+    });
+  });
+
+  it("takes the first manifest above the file that has a name, and the spelling when none has", () => {
+    const files = {
+      // A nested manifest with a name of its own: that is the package the file belongs to.
+      ...installedAs("pkg", { name: "pkg" }),
+      ...installedAs("pkg/native", { name: "react-native" }),
+      // No manifest, and a manifest without a name: nothing says otherwise, so the spelling stands.
+      "node_modules/react-native/index.js": "module.exports = {};\n",
+      ...installedAs("react-dom", {}),
+      "features/money/core/a.ts": 'import "pkg";\nimport "pkg/native";\nimport "react-native";\nimport "react-dom";\n',
+    };
+    withRepo(files, (root) => {
+      expect(found(root)).toEqual([
+        ["features/money/core/a.ts", "pkg/native", "core code may not import react-native"],
+        ["features/money/core/a.ts", "react-native", "core code may not import react-native"],
+        ["features/money/core/a.ts", "react-dom", "core code may not import react-dom"],
+      ]);
     });
   });
 });

@@ -4,8 +4,9 @@ import type { Part, Zone } from "./zones";
 export type Target =
   | { kind: "zone"; zone: Zone }
   | { kind: "unzoned"; rel: string } // inside the repo, but in no zone (a stray file, a tools/ script)
-  // An npm package outside the workspace. `native`: its own manifest requires react-native (the scan
-  // reads it), which a name such as @shopify/flash-list does not say.
+  // An npm package outside the workspace. The scan reads the installed package's own manifest:
+  // `name` is the name it gives itself (the specifier's spelling when there is no manifest to read),
+  // and `native` says that it requires react-native, which a name such as @shopify/flash-list does not.
   | { kind: "package"; name: string; native?: boolean }
   | { kind: "builtin"; name: string }; // node:fs, fs, …
 
