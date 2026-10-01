@@ -12,7 +12,7 @@ describe("this repo's imports", () => {
 
   // A clean result only means something if the scan reached the code: check
   // for files it must see, and a floor well under today's count.
-  it("reach the whole web app", () => {
+  it("reach the whole web app and the mobile app", () => {
     expect(scannedFiles).toContain("apps/web/proxy.ts");
     expect(scannedFiles).toContain("apps/web/app/layout.tsx");
     expect(scannedFiles).toContain("apps/web/lib/server/store.ts");
