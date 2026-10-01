@@ -16,6 +16,7 @@ describe("this repo's imports", () => {
     expect(scannedFiles).toContain("apps/web/proxy.ts");
     expect(scannedFiles).toContain("apps/web/app/layout.tsx");
     expect(scannedFiles).toContain("apps/web/lib/server/store.ts");
+    expect(scannedFiles).toContain("apps/mobile/src/app/index.tsx");
     expect(scannedFiles.length).toBeGreaterThan(300);
   });
 

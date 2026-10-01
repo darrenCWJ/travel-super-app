@@ -7,9 +7,13 @@ packages:
   - tools/*
 
 # Versions shared by more than one package. A package asks for one with
-# "name": "catalog:". Expo's exact pins (react, react-native) join in PR 4.
+# "name": "catalog:". react, react-dom and react-native are the Expo SDK's exact
+# pins (its bundledNativeModules.json): one React for the whole workspace.
 catalog:
   "@types/node": ^26.2.0
+  react: 19.2.3
+  react-dom: 19.2.3
+  react-native: 0.86.3
   typescript: ^7.0.2
   vitest: ^4.1.11
 
