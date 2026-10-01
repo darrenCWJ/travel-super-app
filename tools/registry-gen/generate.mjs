@@ -47,14 +47,35 @@ export function buildRegistry(root) {
   const files = {};
   files['features/_registry/manifests.ts'] = listFile(features.map((name) => ({ name, from: `../${name}/manifest` })));
   for (const part of FEATURE_PARTS) {
-    const present = features.filter((name) => existsSync(join(root, 'features', name, part, 'index.ts')));
+    const present = features.filter((name) => hasPart(root, 'features', name, part));
     files[`features/_registry/${part}.ts`] = mapFile(present.map((name) => ({ name, from: `../${name}/${part}/index` })), part);
   }
   for (const part of PLATFORM_PARTS) {
-    const present = platform.filter((name) => existsSync(join(root, 'platform', name, part, 'index.ts')));
+    const present = platform.filter((name) => hasPart(root, 'platform', name, part));
     files[`platform/_registry/${part}.ts`] = mapFile(present.map((name) => ({ name, from: `../${name}/${part}/index` })), part);
   }
   return files;
+}
+
+/**
+ * Whether a module contributes this part: its `<part>/index.ts` exists. A part folder that is there
+ * without one (an index.tsx, or no index at all) throws, because leaving it out of the registry in
+ * silence means its screens or commands are simply not in the app.
+ * @param {string} root absolute repo root
+ * @param {'features' | 'platform'} layer
+ * @param {string} name module name
+ * @param {string} part
+ * @returns {boolean}
+ */
+function hasPart(root, layer, name, part) {
+  const dir = join(root, layer, name, part);
+  if (existsSync(join(dir, 'index.ts'))) return true;
+  if (existsSync(dir)) {
+    throw new Error(
+      `${layer}/${name}/${part} has no index.ts — a part is registered through its index.ts, which the exports map in ${layer}/package.json points at`,
+    );
+  }
+  return false;
 }
 
 /**
