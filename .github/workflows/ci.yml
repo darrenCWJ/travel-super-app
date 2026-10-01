@@ -82,7 +82,7 @@ jobs:
       # the other tool's tests would keep the sweep green with these never
       # run. This step calls Vitest itself, so it needs no script, and it
       # names the package, so it fails when the package is gone.
-      - run: pnpm --filter @tsa/boundaries --fail-if-no-match exec vitest run src/repo.test.ts
+      - run: pnpm --filter @tsa/boundaries --fail-if-no-match exec vitest run src/repo.test.ts src/ci.test.ts
 
   web:
     needs: changes
