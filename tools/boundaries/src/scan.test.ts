@@ -184,6 +184,39 @@ describe("scanRepo: a specifier is judged by where it lands, not by how it looks
     });
   });
 
+  it("follows an alias spelled like a Node built-in to the repo file behind it", () => {
+    const files = {
+      ...featurePackage,
+      "features/polls/core/p.ts": "export const p = 1;\n",
+      "features/tsconfig.json": JSON.stringify({ compilerOptions: { paths: { util: ["./polls/core/p.ts"], "node:fs": ["./money/server/s.ts"] } } }),
+      "features/money/web/a.tsx": 'import { p } from "util";\nimport { s } from "node:fs";\nimport "node:path";\nexport default [p, s];\n',
+    };
+    withRepo(files, (root) => {
+      const { violations } = scanRepo({ root, tsconfigs: { features: "features/tsconfig.json" } });
+      expect(violations.map((v) => [v.file, v.line, v.specifier, v.reason])).toEqual([
+        ["features/money/web/a.tsx", 1, "util", "features never import each other"],
+        ["features/money/web/a.tsx", 2, "node:fs", "web code may not import server code"],
+      ]);
+    });
+  });
+
+  // A package can carry a built-in's name as well (the `events` polyfill). Node gives that spelling
+  // the built-in, installed package or not, so it is still judged as the built-in.
+  it("takes a built-in's name for the built-in when it lands in node_modules, or nowhere", () => {
+    const files = {
+      ...featurePackage,
+      "node_modules/events/package.json": JSON.stringify({ name: "events", main: "index.js" }),
+      "node_modules/events/index.js": "module.exports = {};\n",
+      "features/money/core/x.ts": 'import "events";\nimport "node:path";\n',
+    };
+    withRepo(files, (root) => {
+      expect(scanRepo({ root }).violations.map((v) => [v.file, v.line, v.reason])).toEqual([
+        ["features/money/core/x.ts", 1, "core code may not use Node built-in events"],
+        ["features/money/core/x.ts", 2, "core code may not use Node built-in node:path"],
+      ]);
+    });
+  });
+
   it("judges a specifier that lands in node_modules as a package, by its name", () => {
     const files = {
       ...featurePackage,
