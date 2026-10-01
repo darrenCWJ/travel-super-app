@@ -145,23 +145,25 @@ export function scanRepo(options: ScanOptions): ScanResult {
   }
 
   function resolveTarget(specifier: string, from: string): Resolved | string {
-    if (isBuiltin(specifier)) return { target: { kind: "builtin", name: specifier }, rel: null };
     const name = packageName(specifier);
-    // The resolver is asked before the name is believed: a path alias can look like a package ("feat/x").
+    // The resolver is asked before the spelling is believed: a path alias can look like a package
+    // ("feat/x") or like a Node built-in ("util").
     const result = resolverFor(from).sync(dirname(join(root, from)), specifier);
+    const rel = result.path ? toPosix(relative(root, result.path)) : null;
+    const installed = rel !== null && rel.split("/").includes("node_modules");
+    if (rel !== null && !installed && !rel.startsWith("..")) {
+      const zone = classify(rel);
+      return { target: zone === null ? { kind: "unzoned", rel } : { kind: "zone", zone }, rel };
+    }
+    // Anywhere but on a file of the repo, a built-in's name means the built-in, as it does to Node.
+    if (isBuiltin(specifier)) return { target: { kind: "builtin", name: specifier }, rel: null };
     if (!result.path) {
       // Not installed, or a subpath the package does not export: an outside package, judged by its name.
       if (name !== null && !workspace.has(name)) return { target: { kind: "package", name }, rel: null };
       return `cannot resolve ${specifier}: ${result.error ?? "unknown error"}`;
     }
-    const rel = toPosix(relative(root, result.path));
-    const installed = rel.split("/").includes("node_modules");
-    if (installed || rel.startsWith("..")) {
-      if (name === null) return `${specifier} resolves outside the repo`;
-      return { target: { kind: "package", name, native: installed && requiresReactNative(name, result.path, manifestIn) }, rel: null };
-    }
-    const zone = classify(rel);
-    return { target: zone === null ? { kind: "unzoned", rel } : { kind: "zone", zone }, rel };
+    if (name === null) return `${specifier} resolves outside the repo`;
+    return { target: { kind: "package", name, native: installed && requiresReactNative(name, result.path, manifestIn) }, rel: null };
   }
 }
 
