@@ -152,6 +152,64 @@ describe("scanRepo: a specifier is judged by where it lands, not by how it looks
   });
 });
 
+// Two registered tsconfigs, one inside the other's folder, spell the same alias differently. Each file
+// is resolved with the tsconfig of the deepest registered folder it sits under, and that one only.
+describe("scanRepo: which registered tsconfig a file is resolved with", () => {
+  const alias = (target: string) => JSON.stringify({ compilerOptions: { paths: { "shared/*": [target] } } });
+  // Read through the outer alias, `shared/s` is the server file of feature c; through the nested one, of feature a.
+  const files = {
+    "features/tsconfig.json": alias("./c/server/*"),
+    "features/a/tsconfig.json": alias("./server/*"),
+    "features/a/server/s.ts": CODE,
+    "features/c/server/s.ts": CODE,
+    "features/a/core/x.ts": 'import "shared/s";\n',
+    "features/c/core/z.ts": 'import "shared/s";\n',
+  };
+  const found = (root: string, tsconfigs: Record<string, string>) =>
+    scanRepo({ root, tsconfigs }).violations.map((v) => [v.file, v.reason]);
+  const outer = { features: "features/tsconfig.json" };
+  const nested = { "features/a": "features/a/tsconfig.json" };
+
+  it("gives a file under the nested folder the nested alias, and one outside it the outer alias", () => {
+    withRepo(files, (root) => {
+      // Both resolve to their own feature's server file: core code may not import server code.
+      const both = [
+        ["features/a/core/x.ts", "core code may not import server code"],
+        ["features/c/core/z.ts", "core code may not import server code"],
+      ];
+      expect(found(root, { ...outer, ...nested })).toEqual(both);
+      // The same registrations in the other order.
+      expect(found(root, { ...nested, ...outer })).toEqual(both);
+    });
+  });
+
+  it("gives a file the alias of a registered folder only when it sits under that folder", () => {
+    withRepo(files, (root) => {
+      // Only the outer alias: feature a's file reaches feature c's server file.
+      expect(found(root, outer)).toEqual([
+        ["features/a/core/x.ts", "features never import each other"],
+        ["features/c/core/z.ts", "core code may not import server code"],
+      ]);
+      // Only the nested alias: feature c's file has none, so `shared/s` is taken for a package.
+      expect(found(root, nested)).toEqual([["features/a/core/x.ts", "core code may not import server code"]]);
+    });
+  });
+
+  // apps/web-admin is not under apps/web, whatever the two names have in common.
+  it("does not give a folder whose name only starts like a registered one that folder's tsconfig", () => {
+    const apps = {
+      "apps/web/tsconfig.json": JSON.stringify({ compilerOptions: { paths: { "@/*": ["./*"] } } }),
+      "apps/web/lib/x.ts": CODE,
+      "apps/web/page.tsx": 'import "@/lib/x";\n',
+      "apps/web-admin/page.tsx": 'import "@/lib/x";\n',
+    };
+    withRepo(apps, (root) => {
+      const { violations } = scanRepo({ root, scanRoots: ["apps/web", "apps/web-admin"], tsconfigs: { "apps/web": "apps/web/tsconfig.json" } });
+      expect(violations.map((v) => [v.file, v.reason])).toEqual([["apps/web-admin/page.tsx", "cannot resolve @/lib/x: Cannot find module '@/lib/x'"]]);
+    });
+  });
+});
+
 describe("scanRepo: a package whose own manifest requires react-native", () => {
   const NAME = "@shopify/flash-list"; // nothing in the name says it is native
   /** An installed package: its manifest (plus `fields`) and its entry file, under the repo's node_modules. */
