@@ -17,6 +17,29 @@ catalog:
   typescript: ^7.0.2
   vitest: ^4.1.11
 
+# expo-router depends on react-native-drawer-layout for its Drawer navigator,
+# and that package's two native peers are required. pnpm would install the
+# newest of each instead of the versions this Expo SDK expects, and Expo's
+# autolinking would compile them, with react-native-worklets, into the Android
+# build, where `expo install --check` cannot see them. The skeleton has no
+# drawer, so the peers are optional here. When the shell needs gestures or
+# Reanimated (phase 3), add them with `expo install` and delete this block.
+packageExtensions:
+  react-native-drawer-layout:
+    peerDependenciesMeta:
+      react-native-gesture-handler:
+        optional: true
+      react-native-reanimated:
+        optional: true
+
+# One react-dom for the whole workspace, including the copy pnpm installs on its
+# own for a package's peer: without this the mobile app's graph gets the newest
+# react-dom beside the catalog's react. react needs no entry while every package
+# that depends on it says "catalog:"; an entry would also rewrite every react
+# peer range in the lockfile, which would hide a real mismatch.
+overrides:
+  react-dom: "catalog:"
+
 # Dependency install scripts stay OFF unless a package is listed `true` here.
 # better-sqlite3 ships prebuilt binaries (prebuilds/win32-x64.node, linux-x64)
 # and this machine has no C++ toolchain, so the `node-gyp rebuild` npm used to
