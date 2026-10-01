@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { parse } from "yaml";
-import { exportsProblems, trackedRegistryFiles, unregisteredAliasConfigs, unscannedCodeFiles } from "./repo";
+import { exportsProblems, redirectFieldProblems, trackedRegistryFiles, unregisteredAliasConfigs, unscannedCodeFiles } from "./repo";
 import { scanRepo, WORKSPACE_LOCATIONS, workspacePackages } from "./scan";
 import { trackedFiles } from "./tracked";
 
@@ -58,6 +58,11 @@ describe("this repo's imports", () => {
 });
 
 describe("this repo's workspace", () => {
+  const packages = [...workspacePackages(root)];
+  const manifestOf = (folder: string): Record<string, unknown> => JSON.parse(readFileSync(join(root, folder, "package.json"), "utf8"));
+  // A check over no package passes on anything, so each one that reads the packages first says it has them.
+  const hasThePackages = () => expect(packages.map(([name]) => name)).toEqual(expect.arrayContaining(["@tsa/features", "@tsa/platform"]));
+
   // The scan looks for the workspace's own packages in a fixed list of places. One that lives
   // anywhere else is not a package to it: its name is not known, and a path into it crosses no
   // package boundary.
@@ -70,10 +75,14 @@ describe("this repo's workspace", () => {
 
   // The scan's resolver takes one branch of a conditional target, and a bundler may take another.
   it("gives each entry of a package's exports one plain string", () => {
-    const packages = [...workspacePackages(root)];
-    expect(packages.map(([name]) => name)).toEqual(expect.arrayContaining(["@tsa/features", "@tsa/platform"]));
-    const exportsOf = (folder: string): unknown => JSON.parse(readFileSync(join(root, folder, "package.json"), "utf8")).exports;
-    expect(packages.flatMap(([name, folder]) => exportsProblems(name, exportsOf(folder)))).toEqual([]);
+    hasThePackages();
+    expect(packages.flatMap(([name, folder]) => exportsProblems(name, manifestOf(folder).exports))).toEqual([]);
+  });
+
+  // A bundler follows these two fields to files the scan's resolver does not read.
+  it("gives no package.json a browser or a react-native field", () => {
+    hasThePackages();
+    expect(packages.flatMap(([name, folder]) => redirectFieldProblems(name, manifestOf(folder)))).toEqual([]);
   });
 });
 
@@ -169,8 +178,44 @@ describe("exportsProblems", () => {
   });
 });
 
+describe("redirectFieldProblems", () => {
+  const refusal = (field: string) =>
+    `@fx/pkg: package.json has a "${field}" field: a bundler may follow it to files the scan's resolver does not read (it follows exports and main)`;
+  const base = { name: "@fx/pkg", main: "./index.ts", exports: { ".": "./index.ts" } };
+
+  it.each<[string, Record<string, unknown>]>([
+    ["a manifest with neither field", base],
+    ["a dependency with the name of a field", { ...base, dependencies: { browser: "1.0.0", "react-native": "0.86.3" } }],
+    ["a condition of that name inside exports, which exportsProblems reports", { ...base, exports: { ".": { browser: "./a.ts", "react-native": "./b.ts" } } }],
+    ["a field whose name only starts like one", { ...base, browserslist: ["last 1 version"], "react-native-web": "./c.ts" }],
+  ])("finds nothing wrong with %s", (_name, manifest) => {
+    expect(redirectFieldProblems("@fx/pkg", manifest)).toEqual([]);
+  });
+
+  // Either field, in any shape: the entry it names, a map of files, a switch that turns a file off, or no more than a flag.
+  const shapes: [string, unknown][] = [
+    ["names another entry", "./index.alt.ts"],
+    ["maps one file to another", { "./index.ts": "./index.alt.ts" }],
+    ["switches a module off", { fs: false }],
+    ["is false", false],
+    ["is null", null],
+    ["is empty", {}],
+    ["is an array", ["./index.alt.ts"]],
+  ];
+  it.each(["browser", "react-native"].flatMap((field) => shapes.map(([shape, value]): [string, string, unknown] => [field, shape, value])))(
+    "reports a %s field that %s",
+    (field, _shape, value) => {
+      expect(redirectFieldProblems("@fx/pkg", { ...base, [field]: value })).toEqual([refusal(field)]);
+    },
+  );
+
+  it("reports both fields, the browser one first", () => {
+    expect(redirectFieldProblems("@fx/pkg", { ...base, "react-native": "./a.ts", browser: "./b.ts" })).toEqual([refusal("browser"), refusal("react-native")]);
+  });
+});
+
 describe("unregisteredAliasConfigs", () => {
-  const PATHS = '{ "compilerOptions": { "paths": { "feat/*": ["../*"] } } }';
+  const PATHS ='{ "compilerOptions": { "paths": { "feat/*": ["../*"] } } }';
   const BASE_URL = '{\n  // a comment, which JSON.parse would refuse\n  "compilerOptions": { "baseUrl": "../.." }\n}';
   const PLAIN = '{ "compilerOptions": { "strict": true } }';
   const registered = ["apps/web/tsconfig.json", "features/tsconfig.json"];
