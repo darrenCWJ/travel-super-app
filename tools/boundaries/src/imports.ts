@@ -29,8 +29,9 @@ export interface ParsedImports {
  * imports, re-exports and import("x") calls; require("x"), `import x = require("x")`,
  * require.context("./dir"), import.meta.glob("…") / .globEager("…") / .webpackContext("…") and the
  * type-position `import("x").T` are not in it, so they are found by walking the AST. A callee is
- * read through parentheses and through the wrappers type stripping removes (`require!`,
- * `require as T`, `require satisfies T`, `<T>require`).
+ * read through parentheses, through the optional chain they enclose (`(require?.context)("./dir")`)
+ * and through the wrappers type stripping removes (`require!`, `require as T`,
+ * `require satisfies T`, `<T>require`).
  *
  * Not seen, so nothing here can refuse them:
  * - triple-slash directives (`/// <reference path="…" />`, `/// <reference types="…" />`);
@@ -105,8 +106,12 @@ export function collectImports(filename: string, source: string): ParsedImports 
 /** The members of import.meta that hand back every module a pattern or a folder matches. */
 const GLOB_METHODS = new Set(["glob", "globEager", "webpackContext"]);
 
-/** What can sit around an expression without changing it: parentheses, and what type stripping removes (`x!`, `x as T`, `x satisfies T`, `<T>x`). */
-const WRAPPERS = new Set(["ParenthesizedExpression", "TSNonNullExpression", "TSAsExpression", "TSSatisfiesExpression", "TSTypeAssertion"]);
+/**
+ * What can sit around an expression without changing it: parentheses, the ChainExpression that oxc
+ * puts round an optional chain (`(x?.y)`), and what type stripping removes (`x!`, `x as T`,
+ * `x satisfies T`, `<T>x`).
+ */
+const WRAPPERS = new Set(["ParenthesizedExpression", "ChainExpression", "TSNonNullExpression", "TSAsExpression", "TSSatisfiesExpression", "TSTypeAssertion"]);
 
 // The expression inside any number of wrappers: `(require as any)` → `require`.
 // biome-ignore lint/suspicious/noExplicitAny: the AST is untyped JSON here.

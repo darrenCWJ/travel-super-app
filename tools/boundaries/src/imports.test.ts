@@ -147,3 +147,43 @@ describe("collectImports: a call written through parentheses or a TypeScript wra
     expect(collectImports("fixture.ts", source)).toEqual({ imports: [], errors: [] });
   });
 });
+
+// oxc puts a ChainExpression round an optional chain. With the chain in parentheses and the call
+// outside, as in `(require?.context)("x")`, it sits between the parentheses and the member. With the
+// call inside the chain, as in `require?.("x")`, the call node is reached as it is.
+describe("collectImports: a call through an optional chain", () => {
+  it.each<[string, ImportKind]>([
+    ['(require?.context)("./x")', "require-context"],
+    ['(import.meta?.glob)("./x")', "import-meta-glob"],
+    ['(require?.context)?.("./x")', "require-context"],
+    ['((require?.context))("./x")', "require-context"],
+    ['(require?.context)!("./x")', "require-context"],
+    ['(require?.context as any)("./x")', "require-context"],
+    ['(import.meta?.glob!)("./x")', "import-meta-glob"],
+    ['(<any>require?.context)("./x")', "require-context"],
+    ['((require)?.context)("./x")', "require-context"],
+    ['(require!?.context)("./x")', "require-context"],
+    // The chain round the call itself: the call node was reached before the chain was looked through.
+    ['(require?.("./x"))', "require"],
+    ['require?.("./x")', "require"],
+    ['require?.context("./x")', "require-context"],
+    ['import.meta?.glob("./x")', "import-meta-glob"],
+  ])("%s → %s", (call, kind) => {
+    const { imports, errors } = collectImports("fixture.ts", `export const x = ${call};\n`);
+    expect(errors).toEqual([]);
+    expect(imports).toEqual([{ specifier: "./x", kind, typeOnly: false, line: 1 }]);
+  });
+
+  it("reports nothing for another callee or another member, in a chain in parentheses", () => {
+    const source = [
+      '(other?.context)("./x");',
+      '(require?.resolve)("./x");',
+      '(meta?.glob)("./x");',
+      '(import.meta?.url)("./x");',
+      '(a?.require)("./x");',
+      '(require?.x).context("./x");',
+      '(import.meta?.x).glob("./x");',
+    ].join("\n");
+    expect(collectImports("fixture.ts", source)).toEqual({ imports: [], errors: [] });
+  });
+});
