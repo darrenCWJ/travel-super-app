@@ -1,11 +1,13 @@
-# The repo's test suite, run on every push and pull request.
+# The repo's checks, run on every push and pull request.
 #
-# Until this existed, every invariant test in the repo was advisory: the only
-# workflow was refresh-airports.yml, which runs an ingest and commits, and
-# nothing anywhere ran `npm test`. The daily airport refresh could commit a
-# reshaped artifact and the globe build could commit an asset missing 61
-# countries, and in both cases the tests written to catch exactly that would
-# sit on disk unexecuted.
+# One workflow that always runs (spec §0). Each job is gated by `if:` on the
+# path filter below, so a job with nothing to check is skipped. A skipped job
+# counts as success, whereas a workflow skipped by `paths:` would leave a
+# required check pending forever. EAS never runs here.
+#
+# Every --filter that names a package carries --fail-if-no-match: pnpm exits 0
+# when a filter matches no package ("No projects matched the filters"), so a
+# rename or a typo would turn the step into a silent no-op.
 name: CI
 
 on:
@@ -14,28 +16,70 @@ on:
   pull_request:
 
 jobs:
-  test:
+  changes:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      shared: ${{ steps.filter.outputs.shared }}
+      web: ${{ steps.filter.outputs.web }}
+      mobile: ${{ steps.filter.outputs.mobile }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dorny/paths-filter@v4
+        id: filter
+        with:
+          filters: |
+            shared:
+              - 'features/**'
+              - 'platform/**'
+              - 'tools/**'
+              - 'package.json'
+              - 'pnpm-workspace.yaml'
+              - 'pnpm-lock.yaml'
+              - '.github/workflows/ci.yml'
+            web:
+              - 'apps/web/**'
+            mobile:
+              - 'apps/mobile/**'
+
+  # The boundary scan reads both apps and every package, so any code change runs it.
+  tools:
+    needs: changes
+    if: ${{ needs.changes.outputs.shared == 'true' || needs.changes.outputs.web == 'true' || needs.changes.outputs.mobile == 'true' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-      # Takes the pnpm version from package.json's packageManager.
+      # Takes the pnpm version from the root package.json's packageManager.
       - uses: pnpm/action-setup@v6
       - uses: actions/setup-node@v5
         with:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      # `pnpm typecheck` runs the `typecheck` script of every workspace package
-      # (`pnpm -r`), so a new package joins the gate by defining one. `pnpm
-      # build` below type-checks the web app a second time, inside `next build`.
-      # `pnpm test` and `pnpm build` are root scripts that delegate as well.
-      # Playwright (in `e2e`) is a devDependency of @tsa/web, so its bin does
-      # not resolve at the workspace root: `e2e` runs it through --filter.
-      # Every --filter in this file carries --fail-if-no-match: pnpm exits 0
-      # when a filter matches no package ("No projects matched the filters"),
-      # so a rename or a typo would turn the step into a silent no-op.
-      - run: pnpm typecheck
-      - run: pnpm test
+      # Every workspace package that is not an app: the two tools today, and
+      # features/ and platform/ from the moment they define a `typecheck` or a
+      # `test` script. The filters exclude the apps instead of naming the rest,
+      # so a new package joins the gate by defining a script, and renaming one
+      # cannot drop it.
+      - run: pnpm --filter "!@tsa/web" --filter "!@tsa/mobile" --fail-if-no-match typecheck
+      - run: pnpm --filter "!@tsa/web" --filter "!@tsa/mobile" --fail-if-no-match test
+
+  web:
+    needs: changes
+    if: ${{ needs.changes.outputs.shared == 'true' || needs.changes.outputs.web == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @tsa/web --fail-if-no-match typecheck
+      - run: pnpm --filter @tsa/web --fail-if-no-match test
       # The `server-only` guard on apps/web/lib/server/airports.ts, cityIndex.ts,
       # catalog.ts and cityEnrichment.ts is only guaranteed to fire in a
       # production build: it is what turns a client import of a multi-megabyte
@@ -48,17 +92,18 @@ jobs:
       # 2026-09-06: a client import of lib/server/catalog fails this command
       # with the full import trace; so, on 2026-09-24, did one of
       # lib/server/cityEnrichment. Measured at 8-19 s locally.
-      - run: pnpm build
+      - run: pnpm --filter @tsa/web --fail-if-no-match build
 
-  # A separate job from `test`, deliberately: a browser download and a Next
+  # A separate job from `web`, deliberately: a browser download and a Next
   # build are minutes of work that the unit gate should not wait behind, and a
   # flaky browser must not be able to redden the suite that has never been
   # flaky on CI.
   e2e:
+    needs: changes
+    if: ${{ needs.changes.outputs.shared == 'true' || needs.changes.outputs.web == 'true' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-      # Takes the pnpm version from package.json's packageManager.
       - uses: pnpm/action-setup@v6
       - uses: actions/setup-node@v5
         with:
@@ -76,7 +121,6 @@ jobs:
         working-directory: apps/web
         run: echo "version=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
       - uses: actions/cache@v4
-        id: pw-cache
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ steps.pw.outputs.version }}
@@ -86,7 +130,6 @@ jobs:
       - run: pnpm --filter @tsa/web --fail-if-no-match exec playwright install --with-deps chromium
       - run: pnpm --filter @tsa/web --fail-if-no-match exec playwright test
         env:
-          # e2e auth secret: committed fixture in apps/web/playwright.config.ts
           CI: "true"
       - uses: actions/upload-artifact@v4
         if: ${{ !cancelled() }}
@@ -96,3 +139,38 @@ jobs:
             apps/web/playwright-report/
             apps/web/test-results/
           retention-days: 7
+
+  mobile:
+    needs: changes
+    if: ${{ needs.changes.outputs.shared == 'true' || needs.changes.outputs.mobile == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @tsa/mobile --fail-if-no-match typecheck
+      # Compares the installed versions with what this Expo SDK expects. It asks
+      # Expo's API, so this step needs the network. It reads only the app's
+      # direct dependencies: a native module that arrives as another package's
+      # peer is invisible to it (see packageExtensions in pnpm-workspace.yaml).
+      - run: pnpm --filter @tsa/mobile --fail-if-no-match exec expo install --check
+      - run: pnpm --filter @tsa/mobile --fail-if-no-match exec jest --ci
+      # Bundles the JavaScript for both platforms without a native build: proves
+      # Metro resolves the workspace packages and the generated registry.
+      - run: pnpm --filter @tsa/mobile --fail-if-no-match export
+
+  # The one check to require: green only when every job above passed or was
+  # skipped by the path filter.
+  ci-ok:
+    needs: [changes, tools, web, e2e, mobile]
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: A job failed or was cancelled
+        if: ${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}
+        run: exit 1
+      - run: echo "Every job passed or was skipped."
