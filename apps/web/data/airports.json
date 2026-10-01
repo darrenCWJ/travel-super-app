@@ -1,5 +1,5 @@
 {
- "generatedAt": "2026-09-30T14:58:45.873Z",
+ "generatedAt": "2026-10-01T15:29:54.515Z",
  "source": "Public domain (OurAirports, regenerated nightly)",
  "airports": [
   {
@@ -14516,7 +14516,7 @@
    "iata": "INV",
    "icao": "EGPE",
    "name": "Inverness Airport",
-   "municipality": "Inverness",
+   "municipality": "Inverness, Highland",
    "country": "GB",
    "lat": 57.5425,
    "lon": -4.0475,
@@ -14546,7 +14546,7 @@
    "iata": "IOM",
    "icao": "EGNS",
    "name": "Isle of Man Airport",
-   "municipality": "Castletown",
+   "municipality": "Castletown, Rushen",
    "country": "IM",
    "lat": 54.083081,
    "lon": -4.623871,
