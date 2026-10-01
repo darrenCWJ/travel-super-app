@@ -8,10 +8,12 @@ export type ImportKind =
   | "require" // require("x")
   | "import-equals" // import x = require("x")  (TypeScript; oxc's module record leaves it out)
   | "require-context" // require.context("./dir")  (Metro; bypasses the registry)
+  | "import-meta-glob" // import.meta.glob("./dir/*.ts"), import.meta.globEager(…)  (Vite; bypasses the registry)
   | "dynamic-unknown"; // import(someVariable) — cannot be checked
 
 export interface ImportRef {
-  specifier: string | null; // null only for "dynamic-unknown"
+  // null for "dynamic-unknown", and for a require.context or import.meta.glob call whose first argument is not one string
+  specifier: string | null;
   kind: ImportKind;
   typeOnly: boolean;
   line: number;
@@ -23,9 +25,19 @@ export interface ParsedImports {
 }
 
 /**
- * Every module reference in one file. oxc's module record supplies static imports, re-exports and
- * import("x") calls; require("x"), `import x = require("x")`, require.context("./dir") and the
- * type-position `import("x").T` are not in it, so they are found by walking the AST.
+ * The module references in one file that this function can see. oxc's module record supplies static
+ * imports, re-exports and import("x") calls; require("x"), `import x = require("x")`,
+ * require.context("./dir"), import.meta.glob("…") / import.meta.globEager("…") and the type-position
+ * `import("x").T` are not in it, so they are found by walking the AST.
+ *
+ * Not seen, so nothing here can refuse them:
+ * - triple-slash directives (`/// <reference path="…" />`, `/// <reference types="…" />`);
+ * - JSDoc types (`@type {import("x")}`): comments are not walked;
+ * - `require.resolve("x")`;
+ * - a `require` reached through another name (`const r = require; r("x")`), and `createRequire`:
+ *   only a call spelled `require(…)` or `require.context(…)` is recognised. The same holds for
+ *   `import.meta` kept in a variable, and for a member reached by a computed key
+ *   (`require["context"]`, `import.meta["glob"]`).
  */
 export function collectImports(filename: string, source: string): ParsedImports {
   const result = parseSync(filename, source);
@@ -79,6 +91,14 @@ export function collectImports(filename: string, source: string): ParsedImports 
       callee.property?.name === "context"
     ) {
       imports.push({ specifier: literal, kind: "require-context", typeOnly: false, line: lineOf(node.start) });
+    }
+    // import.meta is the MetaProperty whose first word is `import` (the other one is new.target).
+    if (
+      callee?.type === "MemberExpression" &&
+      callee.object?.meta?.name === "import" &&
+      (callee.property?.name === "glob" || callee.property?.name === "globEager")
+    ) {
+      imports.push({ specifier: literal, kind: "import-meta-glob", typeOnly: false, line: lineOf(node.start) });
     }
   });
 

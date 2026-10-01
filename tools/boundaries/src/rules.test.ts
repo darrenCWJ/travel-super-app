@@ -8,6 +8,8 @@ const to = (layer: Layer, owner: string, part: Part | null, kind?: string): Targ
 /** A generated registry file: `kind` is its base name ("server" for features/_registry/server.ts). */
 const registry = (layer: "feature" | "platform", kind: string): Target => to(layer, "_registry", "registry", kind);
 const pkg = (name: string): Target => ({ kind: "package", name });
+/** An installed package whose own manifest requires react-native (the scan reads it; see scan.ts). */
+const nativePkg = (name: string): Target => ({ kind: "package", name, native: true });
 const builtin = (name: string): Target => ({ kind: "builtin", name });
 
 const moneyCore = z("feature", "money", "core");
@@ -223,6 +225,73 @@ describe("checkEdge: packages", () => {
   });
 });
 
+// The two native families by name, one row per shape a name can take. The unscoped shapes
+// (react-native, react-native-*, @react-native/*, @react-native-*/*, expo, expo-*, @expo/*) have their
+// rows in the table above.
+describe("checkEdge: native packages by name", () => {
+  it.each<[string, Zone, Target, boolean]>([
+    ["web → @testing-library/react-native (the scoped name is react-native)", moneyWeb, pkg("@testing-library/react-native"), false],
+    ["web → @shopify/react-native-skia (the scoped name starts react-native-)", moneyWeb, pkg("@shopify/react-native-skia"), false],
+    ["web → @maplibre/maplibre-react-native (the scoped name ends -react-native)", moneyWeb, pkg("@maplibre/maplibre-react-native"), false],
+    ["web → @react-navigation/native", moneyWeb, pkg("@react-navigation/native"), false],
+    ["web → lottie-react-native (unscoped: the name does not tell)", moneyWeb, pkg("lottie-react-native"), true],
+    ["web → @testing-library/react", moneyWeb, pkg("@testing-library/react"), true],
+    ["mobile → @maplibre/maplibre-react-native", moneyMobile, pkg("@maplibre/maplibre-react-native"), true],
+    ["mobile app → @react-navigation/native", mobile, pkg("@react-navigation/native"), true],
+    ["web → @better-auth/expo (the scoped name is expo)", moneyWeb, pkg("@better-auth/expo"), false],
+    ["web → @acme/expo-camera (the scoped name starts expo-)", moneyWeb, pkg("@acme/expo-camera"), false],
+    ["web → exponential-backoff", moneyWeb, pkg("exponential-backoff"), true],
+    ["mobile → @better-auth/expo", moneyMobile, pkg("@better-auth/expo"), true],
+  ])("%s", (_name, from, target, ok) => {
+    expect(checkEdge(from, target) === null).toBe(ok);
+  });
+});
+
+// A package whose manifest requires react-native is judged like the React Native family, whatever
+// it is called: refused wherever that family is, allowed wherever it is.
+describe("checkEdge: native packages by manifest", () => {
+  it.each<[string, Zone, Target, boolean]>([
+    ["core → native package", moneyCore, nativePkg("@shopify/flash-list"), false],
+    ["client → native package", moneyClient, nativePkg("@shopify/flash-list"), false],
+    ["server → native package", moneyServer, nativePkg("@shopify/flash-list"), false],
+    ["db → native package", moneyDb, nativePkg("@shopify/flash-list"), false],
+    ["web → native package", moneyWeb, nativePkg("@shopify/flash-list"), false],
+    ["web app → native package", web, nativePkg("@shopify/flash-list"), false],
+    ["mobile → native package", moneyMobile, nativePkg("@shopify/flash-list"), true],
+    ["mobile app → native package", mobile, nativePkg("@shopify/flash-list"), true],
+    ["test → native package", moneyTest, nativePkg("@shopify/flash-list"), true],
+    ["web → the same name, manifest not native", moneyWeb, pkg("@shopify/flash-list"), true],
+  ])("%s", (_name, from, target, ok) => {
+    expect(checkEdge(from, target) === null).toBe(ok);
+  });
+});
+
+// The two apps share logic and never screens (spec §0), so this one package is refused everywhere,
+// in the places that are otherwise unrestricted too.
+describe("checkEdge: react-native-web", () => {
+  it.each<[string, Zone]>([
+    ["core", moneyCore],
+    ["client", moneyClient],
+    ["server", moneyServer],
+    ["db", moneyDb],
+    ["web", moneyWeb],
+    ["mobile", moneyMobile],
+    ["a manifest", moneyManifest],
+    ["a test", moneyTest],
+    ["a generated registry", z("feature", "_registry", "registry", "mobile")],
+    ["a file in no part folder", z("feature", "money", null)],
+    ["the web app", web],
+    ["the mobile app", mobile],
+  ])("is refused from %s", (_name, from) => {
+    expect(checkEdge(from, pkg("react-native-web"))).toBe("nothing uses react-native-web (spec §0)");
+  });
+
+  it("is the package of exactly that name, not its neighbours", () => {
+    expect(checkEdge(moneyMobile, pkg("react-native-webview"))).toBeNull();
+    expect(checkEdge(moneyTest, pkg("babel-plugin-react-native-web"))).toBeNull();
+  });
+});
+
 describe("checkEdge: what a refusal says", () => {
   it.each<[string, Zone, Target, string]>([
     ["an app reading the wrong registry", web, registry("feature", "mobile"), "apps/web may not import the mobile registry"],
@@ -231,6 +300,7 @@ describe("checkEdge: what a refusal says", () => {
     ["an app importing a banned package", web, pkg("react-native"), "apps/web may not import react-native"],
     ["an app using a banned built-in", mobile, builtin("node:fs"), "apps/mobile may not use Node built-in node:fs"],
     ["a part importing a banned package", moneyCore, pkg("react"), "core code may not import react"],
+    ["a part importing a package whose manifest requires react-native", moneyWeb, nativePkg("@shopify/flash-list"), "web code may not import @shopify/flash-list"],
     ["a part importing a part it may not", moneyClient, to("feature", "money", "server"), "client code may not import server code"],
   ])("%s", (_name, from, target, reason) => {
     expect(checkEdge(from, target)).toBe(reason);
