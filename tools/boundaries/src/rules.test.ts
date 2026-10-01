@@ -238,8 +238,12 @@ describe("checkEdge: native packages by name", () => {
     ["web → @testing-library/react", moneyWeb, pkg("@testing-library/react"), true],
     ["mobile → @maplibre/maplibre-react-native", moneyMobile, pkg("@maplibre/maplibre-react-native"), true],
     ["mobile app → @react-navigation/native", mobile, pkg("@react-navigation/native"), true],
-    ["web → @better-auth/expo (the scoped name is expo)", moneyWeb, pkg("@better-auth/expo"), false],
+    ["web → @better-auth/expo (a scoped package named exactly expo is not Expo by name)", moneyWeb, pkg("@better-auth/expo"), true],
+    ["server → @better-auth/expo", moneyServer, pkg("@better-auth/expo"), true],
+    ["web app → @better-auth/expo", web, pkg("@better-auth/expo"), true],
     ["web → @acme/expo-camera (the scoped name starts expo-)", moneyWeb, pkg("@acme/expo-camera"), false],
+    ["server → @scope/expo-thing", moneyServer, pkg("@scope/expo-thing"), false],
+    ["web app → @scope/expo-thing", web, pkg("@scope/expo-thing"), false],
     ["web → exponential-backoff", moneyWeb, pkg("exponential-backoff"), true],
     ["mobile → @better-auth/expo", moneyMobile, pkg("@better-auth/expo"), true],
   ])("%s", (_name, from, target, ok) => {
