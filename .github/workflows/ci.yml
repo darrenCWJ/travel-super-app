@@ -34,8 +34,9 @@ jobs:
         with:
           # A path in no group runs no job, and ci-ok stays green, so a new
           # top-level code directory or a new app needs a line here.
-          # reference/ does not exist yet (phase 4): it is listed so that its
-          # first pull request is checked.
+          # reference/ (a layer in tools/boundaries/src/zones.ts, created by the
+          # spec's §12 item 4) is listed from the start so that its first pull
+          # request is checked.
           filters: |
             shared:
               - 'features/**'
