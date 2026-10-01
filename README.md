@@ -156,7 +156,7 @@ features/               package @tsa/features: one folder per feature; _registry
 platform/               package @tsa/platform: one folder per shared module; _registry/ is generated on install, never committed
 tools/
   registry-gen/         writes the generated registries; the root postinstall runs it
-  boundaries/           the import scan that enforces the zone rules, as a test in its own suite
+  boundaries/           the import scan that enforces the zone rules, the checks on CI's path filter and job gates, and the lockfile checks, all as tests in its own suite
 docs/
   PLAN.md               Where things stand and what is open
   RESEARCH.md           Data-source research (APIs, open data, scraping legality), August 2026
