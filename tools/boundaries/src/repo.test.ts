@@ -3,7 +3,8 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { parse } from "yaml";
-import { isCodeFile, SCAN_ROOTS, scanRepo, WORKSPACE_LOCATIONS } from "./scan";
+import { unscannedCodeFiles } from "./repo";
+import { scanRepo, WORKSPACE_LOCATIONS } from "./scan";
 import { trackedFiles } from "./tracked";
 
 const root = fileURLToPath(new URL("../../..", import.meta.url));
@@ -15,9 +16,12 @@ const TSCONFIGS = Object.fromEntries(
   TSCONFIG_DIRS.filter((dir) => existsSync(join(root, dir, "tsconfig.json"))).map((dir) => [dir, `${dir}/tsconfig.json`]),
 );
 
-// Tracked code files under a scan root that the scan leaves out on purpose. Exact paths only, each
-// with its reason: a pattern here would also hide the next file that matches it.
-const UNSCANNED_ON_PURPOSE: string[] = [];
+// Tracked code files the rules govern that the scan leaves out on purpose, in the order git lists
+// them. Exact paths only, each with its reason: a pattern here would also hide the next file that
+// matches it.
+const UNSCANNED_ON_PURPOSE = [
+  "apps/mobile/app.config.js", // Expo's config: it runs in Node, not in the app
+];
 
 describe("this repo's imports", () => {
   const { violations, scannedFiles } = scanRepo({ root, tsconfigs: TSCONFIGS });
@@ -38,16 +42,12 @@ describe("this repo's imports", () => {
   });
 
   // Fails closed: a tracked code file in a folder the walk skips (a feature named "coverage", a new
-  // dot-folder) is named here instead of going unchecked.
-  it("reach every tracked code file under the scan roots", () => {
+  // dot-folder), beside the scan roots (apps/mobile/lib/…) or in an app the scan has no root for is
+  // named here instead of going unchecked. So is an entry of the list above that has gone stale.
+  it("reach every tracked code file the rules govern", () => {
     const tracked = trackedFiles(root);
     expect(tracked).toContain("apps/web/proxy.ts");
-    const scanned = new Set(scannedFiles);
-    const underScanRoot = (rel: string) => SCAN_ROOTS.some((scanRoot) => rel.startsWith(`${scanRoot}/`));
-    const missed = tracked.filter(
-      (rel) => underScanRoot(rel) && isCodeFile(rel) && !scanned.has(rel) && !UNSCANNED_ON_PURPOSE.includes(rel),
-    );
-    expect(missed).toEqual([]);
+    expect(unscannedCodeFiles(tracked, scannedFiles)).toEqual(UNSCANNED_ON_PURPOSE);
   });
 
   it("cross no zone boundary", () => {
@@ -64,5 +64,25 @@ describe("this repo's workspace", () => {
     if (!Array.isArray(listed) || listed.length === 0) throw new Error("pnpm-workspace.yaml has no packages list");
     const unknown = listed.filter((location) => !WORKSPACE_LOCATIONS.includes(location));
     expect(unknown, "pnpm-workspace.yaml lists a location the boundary scan does not know: teach workspacePackages() in scan.ts").toEqual([]);
+  });
+});
+
+// The checks above, each shown an input that is wrong in one way.
+describe("unscannedCodeFiles", () => {
+  const scanned = ["apps/web/page.tsx", "features/money/core/split.ts"];
+
+  it.each<[string, string, boolean]>([
+    ["a file the scan read", "apps/web/page.tsx", false],
+    ["a file under a scan root that the walk skipped", "features/coverage/core/x.ts", true],
+    ["a file at a layer's root, which is in no zone", "features/helpers.ts", true],
+    ["a file beside the mobile app's scan roots", "apps/mobile/lib/bridge.ts", true],
+    ["a file at the mobile app's root", "apps/mobile/app.config.js", true],
+    ["a file of an app the scan has no root for", "apps/admin/src/a.ts", true],
+    ["a declaration file", "features/money/core/evil.d.ts", false],
+    ["a file that is not code", "apps/mobile/app.json", false],
+    ["a tool's own source", "tools/boundaries/src/scan.ts", false],
+    ["a file at the repo's root", "vitest.config.ts", false],
+  ])("%s: %s", (_name, rel, named) => {
+    expect(unscannedCodeFiles([rel], scanned)).toEqual(named ? [rel] : []);
   });
 });
