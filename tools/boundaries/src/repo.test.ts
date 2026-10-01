@@ -215,7 +215,7 @@ describe("redirectFieldProblems", () => {
 });
 
 describe("unregisteredAliasConfigs", () => {
-  const PATHS ='{ "compilerOptions": { "paths": { "feat/*": ["../*"] } } }';
+  const PATHS = '{ "compilerOptions": { "paths": { "feat/*": ["../*"] } } }';
   const BASE_URL = '{\n  // a comment, which JSON.parse would refuse\n  "compilerOptions": { "baseUrl": "../.." }\n}';
   const PLAIN = '{ "compilerOptions": { "strict": true } }';
   const registered = ["apps/web/tsconfig.json", "features/tsconfig.json"];
