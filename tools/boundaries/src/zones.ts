@@ -13,6 +13,8 @@ export interface Zone {
 }
 
 const LAYERS: Record<string, Layer> = { features: "feature", platform: "platform", reference: "reference" };
+/** The top-level folders that hold zoned code: the two apps' parent and the three layers. */
+export const ZONED_ROOTS = ["apps", ...Object.keys(LAYERS)];
 /** The layers tools/registry-gen writes a `_registry` folder into (spec §0 "Registry"). reference/ has none. */
 const REGISTRY_LAYERS = new Set<Layer>(["feature", "platform"]);
 const PART_DIRS = new Set<Part>(["core", "client", "server", "db", "web", "mobile"]);

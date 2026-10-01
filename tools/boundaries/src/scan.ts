@@ -242,7 +242,7 @@ function cached<T>(read: (key: string) => T): (key: string) => T {
  * The workspace's own packages, name → repo-relative folder. An import of one resolves to a file
  * and is judged by zone; the folder says which package a file belongs to.
  */
-function workspacePackages(root: string): Map<string, string> {
+export function workspacePackages(root: string): Map<string, string> {
   const folders = [...LAYER_ROOTS];
   for (const group of PACKAGE_GROUPS) {
     const dir = join(root, group);
