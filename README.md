@@ -181,11 +181,18 @@ resets are admin-assisted (`ADMIN_USER_IDS`) — no email service needed.
 
 Deployed on Vercel at <https://china-itinerary-planner.vercel.app>.
 
-Storage picks its backend from the environment (`lib/server/store.ts`):
+The Vercel project builds from `apps/web`: its Root Directory (Project
+Settings → Build and Deployment) is set to `apps/web`. The repo overrides
+neither the install command nor the build command: `apps/web/vercel.json`
+holds only the function region. pnpm 10 comes from the `packageManager` field
+of the root `package.json`.
+
+Storage picks its backend from the environment
+(`apps/web/lib/server/store.ts`):
 
 - `DATABASE_URL` set → **Postgres** (e.g. Supabase — use the *transaction
   pooler* connection string, port 6543)
-- no `DATABASE_URL`, local machine → SQLite in `data/app.db`
+- no `DATABASE_URL`, local machine → SQLite in `apps/web/data/app.db`
 - no `DATABASE_URL` on Vercel → shared-trip endpoints return 503 with
   instructions (the planner and catalog still work fully)
 
@@ -194,7 +201,7 @@ copy the pooled connection string → Vercel project → Settings →
 Environment Variables → add `DATABASE_URL` → redeploy. Tables are created
 automatically on first use.
 
-**Keep the functions next to the database.** `vercel.json` pins the
+**Keep the functions next to the database.** `apps/web/vercel.json` pins the
 serverless functions to `bom1` (Mumbai), the same AWS region as the Supabase
 project (`ap-south-1`). Left at Vercel's default they ran in `iad1`
 (Washington DC), so every database round trip crossed the planet: a cold
@@ -227,8 +234,8 @@ passwords survive — Better Auth salts each one separately, the secret is not
 part of the hash. Nothing else needs migrating; old rows in `session` become
 dead weight and can be deleted. On Vercel the change needs a redeploy to take
 effect, since the auth instance is cached per process. A blank value makes the
-deployment fail to start (see `instrumentation.ts`) rather than quietly
-reopening the site.
+deployment fail to start (see `apps/web/instrumentation.ts`) rather than
+quietly reopening the site.
 
 The catalog refresh endpoint is local-only (serverless filesystems are
 read-only): rerun `cd apps/web; node scripts/ingest-destinations.mjs`, commit,
