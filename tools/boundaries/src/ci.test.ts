@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
+  continueOnError,
   filterGroups,
   filtersWithoutFailIfNoMatch,
   gateProblems,
@@ -10,6 +11,8 @@ import {
   matchesPattern,
   namedTestFiles,
   parseWorkflow,
+  summaryProblems,
+  triggerProblems,
   unaccountedFiles,
   type Workflow,
 } from "./ci";
@@ -55,7 +58,19 @@ describe("the CI workflow", () => {
     expect(jobsNotNeededBy(workflow, "ci-ok")).toEqual([]);
   });
 
-  it("puts --fail-if-no-match on every --filter", () => {
+  it("has ci-ok run whatever happened, and fail when a job failed or was cancelled", () => {
+    expect(summaryProblems(workflow)).toEqual([]);
+  });
+
+  it("lets no job and no step continue on error", () => {
+    expect(continueOnError(workflow)).toEqual([]);
+  });
+
+  it("runs for a push to any branch and for pull requests", () => {
+    expect(triggerProblems(workflow)).toEqual([]);
+  });
+
+  it("puts --fail-if-no-match on every --filter and -F", () => {
     expect(filtersWithoutFailIfNoMatch(workflow)).toEqual([]);
   });
 
@@ -72,8 +87,11 @@ describe("the CI workflow", () => {
 const FILTERS = "shared:\n  - 'tools/**'\n  - 'package.json'\nweb:\n  - 'apps/web/**'\n";
 const BOTH = "${{ needs.changes.outputs.shared == 'true' || needs.changes.outputs.web == 'true' }}";
 const TABLE = { tools: ["shared", "web"], web: ["shared", "web"] };
+const ALWAYS = "${{ always() }}";
+const A_JOB_FAILED = "${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}";
 function sound(): Workflow {
   return {
+    on: { push: { branches: ["**"] }, pull_request: null },
     jobs: {
       changes: {
         outputs: { shared: "${{ steps.filter.outputs.shared }}", web: "${{ steps.filter.outputs.web }}" },
@@ -81,7 +99,7 @@ function sound(): Workflow {
       },
       tools: { needs: "changes", if: BOTH, steps: [{ run: 'pnpm --filter "!@x/web" --fail-if-no-match test' }] },
       web: { needs: "changes", if: BOTH, steps: [{ run: "pnpm --filter @x/web --fail-if-no-match test" }] },
-      "ci-ok": { needs: ["changes", "tools", "web"], if: "${{ always() }}", steps: [{ run: "echo ok" }] },
+      "ci-ok": { needs: ["changes", "tools", "web"], if: ALWAYS, steps: [{ if: A_JOB_FAILED, run: "exit 1" }, { run: "echo ok" }] },
     },
   };
 }
@@ -259,6 +277,106 @@ describe("jobsNotNeededBy", () => {
   });
 });
 
+describe("summaryProblems", () => {
+  it("finds nothing wrong with a summary job that always runs, and whose first step fails it", () => {
+    expect(summaryProblems(sound())).toEqual([]);
+  });
+
+  it.each<[string, (workflow: Workflow) => void, string[]]>([
+    [
+      "a summary job with no condition, which a failed job would leave skipped",
+      (w) => {
+        delete w.jobs["ci-ok"].if;
+      },
+      [`job ci-ok is gated by nothing, not by ${ALWAYS}`],
+    ],
+    [
+      "a summary job that runs only when every job passed",
+      (w) => {
+        w.jobs["ci-ok"].if = "${{ success() }}";
+      },
+      ["job ci-ok is gated by ${{ success() }}, not by " + ALWAYS],
+    ],
+    [
+      "a failing step that can never run",
+      (w) => {
+        w.jobs["ci-ok"].steps![0].if = "${{ false }}";
+      },
+      ["the first step of ci-ok is gated by ${{ false }}, not by " + A_JOB_FAILED],
+    ],
+    [
+      "a failing step that does not look for a cancelled job",
+      (w) => {
+        w.jobs["ci-ok"].steps![0].if = "${{ contains(needs.*.result, 'failure') }}";
+      },
+      ["the first step of ci-ok is gated by ${{ contains(needs.*.result, 'failure') }}, not by " + A_JOB_FAILED],
+    ],
+    [
+      "a first step that does not fail the job",
+      (w) => {
+        w.jobs["ci-ok"].steps![0].run = "echo a job failed";
+      },
+      ["the first step of ci-ok runs echo a job failed, not exit 1"],
+    ],
+    [
+      "the failing step put second",
+      (w) => {
+        w.jobs["ci-ok"].steps!.reverse();
+      },
+      [`the first step of ci-ok is gated by nothing, not by ${A_JOB_FAILED}`, "the first step of ci-ok runs echo ok, not exit 1"],
+    ],
+    [
+      "a summary job with no step",
+      (w) => {
+        delete w.jobs["ci-ok"].steps;
+      },
+      [`the first step of ci-ok is gated by nothing, not by ${A_JOB_FAILED}`, "the first step of ci-ok runs nothing, not exit 1"],
+    ],
+  ])("reports %s", (_name, change, problems) => {
+    expect(summaryProblems(broken(change))).toEqual(problems);
+  });
+
+  it("throws when the workflow has no such summary job", () => {
+    expect(() => summaryProblems(sound(), "all-green")).toThrow("the workflow has no all-green job");
+  });
+});
+
+describe("continueOnError", () => {
+  it("names nothing in a workflow where every failure counts", () => {
+    expect(continueOnError(sound())).toEqual([]);
+  });
+
+  it("names each job and each step that carries continue-on-error, whatever its value", () => {
+    const lenient = broken((workflow) => {
+      workflow.jobs.tools.steps![0]["continue-on-error"] = false;
+      workflow.jobs.web["continue-on-error"] = true;
+    });
+    expect(continueOnError(lenient)).toEqual(["job tools, step 1", "job web"]);
+  });
+});
+
+describe("triggerProblems", () => {
+  it("finds nothing wrong with a push to any branch plus pull requests", () => {
+    expect(triggerProblems(sound())).toEqual([]);
+  });
+
+  const noBranches = 'on.push.branches is not set, not ["**"]';
+  it.each<[string, unknown, string[]]>([
+    ["pushes to main only", { push: { branches: ["main"] }, pull_request: null }, ['on.push.branches is ["main"], not ["**"]']],
+    ["a second branch pattern", { push: { branches: ["**", "!wip/**"] }, pull_request: null }, ['on.push.branches is ["**","!wip/**"], not ["**"]']],
+    ["a push trigger that names no branches", { push: null, pull_request: null }, [noBranches]],
+    ["no push trigger", { pull_request: null }, [noBranches]],
+    ["no pull_request trigger", { push: { branches: ["**"] } }, ["on.pull_request is missing"]],
+    ["triggers written as a list", ["push", "pull_request"], [noBranches, "on.pull_request is missing"]],
+    ["no triggers at all", undefined, [noBranches, "on.pull_request is missing"]],
+  ])("reports %s", (_name, on, problems) => {
+    const changed = broken((workflow) => {
+      workflow.on = on;
+    });
+    expect(triggerProblems(changed)).toEqual(problems);
+  });
+});
+
 describe("filtersWithoutFailIfNoMatch", () => {
   it("names nothing when every --filter carries the flag", () => {
     expect(filtersWithoutFailIfNoMatch(sound())).toEqual([]);
@@ -273,6 +391,18 @@ describe("filtersWithoutFailIfNoMatch", () => {
       ];
     });
     expect(filtersWithoutFailIfNoMatch(loose)).toEqual(["web: pnpm --filter @x/web test", "web: pnpm --filter @x/web build"]);
+  });
+
+  it("holds -F, pnpm's short form of --filter, to the same rule, and leaves another command's -F alone", () => {
+    const short = broken((workflow) => {
+      workflow.jobs.web.steps = [
+        { run: "pnpm -F @x/web test" },
+        { run: "pnpm -F @x/web --fail-if-no-match typecheck" },
+        { run: "grep -F needle build.log" },
+        { run: "pnpm install --frozen-lockfile" },
+      ];
+    });
+    expect(filtersWithoutFailIfNoMatch(short)).toEqual(["web: pnpm -F @x/web test"]);
   });
 });
 
