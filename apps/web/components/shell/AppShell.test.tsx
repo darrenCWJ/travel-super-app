@@ -1,100 +1,80 @@
-import { cleanup, render, screen } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { cleanup, render, screen, within } from "@testing-library/react";
+import { afterEach, describe, expect, test, vi } from "vitest";
 import { AppShell } from "./AppShell";
 
 /**
- * The plan declines a test for this task on the grounds that the shell is
- * visual work, and the layout genuinely is — rail width, header rhythm and
- * safe-area padding are not things a jsdom assertion can judge honestly.
+ * The plan declines a test for the shell on the grounds that it is visual
+ * work, and the layout genuinely is — header rhythm and safe-area padding are
+ * not things a jsdom assertion can judge honestly. What it renders is not.
  *
- * Its *route gating* is not visual. Which routes get chrome and which get a
- * rail are two branches that silently regress into a login page wearing an
- * application header, so they are tested here. Nothing below asserts on
- * appearance.
+ * While the app is rebuilt (phase 1, slice A) the shell is one frame for every
+ * route: the brand link home, the display settings and the bottom edge. The
+ * account chip, the trip zone and the rail served sign-in and the trip pages,
+ * which are retired; their components stay, unmounted, until phase 4.
+ *
+ * The route is mocked even though the shell no longer reads it, so that each
+ * case below really is that route: the cases are the routes that used to get
+ * a different frame — bare on /login, /signup and /b/, a rail on /trip/.
  */
-
 const pathname = vi.hoisted(() => ({ current: "/" }));
 
 vi.mock("next/navigation", () => ({
   usePathname: () => pathname.current,
-  // RailNav reads `?tab=`; no test here depends on which tab is active.
   useSearchParams: () => new URLSearchParams(),
+  useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
 }));
 
-// AccountChip calls the auth client, which is not what this test is about.
-vi.mock("@/components/auth/AccountChip", () => ({
-  AccountChip: () => <div data-testid="account-chip" />,
-}));
+function renderShellAt(path: string) {
+  pathname.current = path;
+  return render(
+    <AppShell>
+      <p>page body</p>
+    </AppShell>
+  );
+}
 
-describe("AppShell route gating", () => {
-  beforeEach(() => {
-    pathname.current = "/";
-  });
-
+describe("AppShell", () => {
   // The jsdom project does not enable globals, so RTL's automatic cleanup never
   // registers and renders would accumulate across cases. Same as
   // PrefsProvider.test.tsx.
   afterEach(cleanup);
 
-  test.each(["/login", "/signup", "/b/abc123"])("renders %s bare, with no chrome", (path) => {
-    pathname.current = path;
-    render(
-      <AppShell>
-        <p>page body</p>
-      </AppShell>
-    );
+  test.each(["/", "/plan", "/rebuilding", "/login", "/signup", "/b/abc123", "/trip/abc"])(
+    "gives %s the same header: the brand link home and the display settings",
+    (path) => {
+      renderShellAt(path);
 
-    expect(screen.getByText("page body")).toBeInTheDocument();
-    expect(screen.queryByRole("banner")).not.toBeInTheDocument();
-    expect(screen.queryByTestId("account-chip")).not.toBeInTheDocument();
+      expect(screen.getByText("page body")).toBeInTheDocument();
+      const header = screen.getByRole("banner");
+      expect(within(header).getByRole("link", { name: /Itinerary Planner/ })).toHaveAttribute("href", "/");
+      expect(within(header).getByLabelText("Display settings")).toBeInTheDocument();
+    }
+  );
+
+  test.each(["/plan", "/trip/abc"])("renders no account chip, trip zone or rail on %s", (path) => {
+    renderShellAt(path);
+
+    expect(screen.queryByRole("link", { name: "Sign in" })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Account menu/ })).toBeNull();
+    expect(screen.queryByLabelText("Switch trip")).toBeNull();
+    expect(screen.queryByRole("navigation", { name: "Trip sections" })).toBeNull();
   });
 
-  test("gives a non-trip route the header but no rail", () => {
+  test("keeps the bottom edge, the one place a pinned bottom element may go (C2)", () => {
+    const { container } = renderShellAt("/plan");
+
+    expect(container.querySelector("#shell-bottom")).not.toBeNull();
+  });
+
+  test("renders a theme slot it is given in place of the real one", () => {
     pathname.current = "/plan";
     render(
-      <AppShell>
+      <AppShell themeToggle={<button type="button">theme</button>}>
         <p>page body</p>
       </AppShell>
     );
 
-    expect(screen.getByRole("banner")).toBeInTheDocument();
-    expect(screen.queryByRole("navigation", { name: "Trip sections" })).not.toBeInTheDocument();
-  });
-
-  test("gives a trip route the rail, rendered from TRIP_NAV", () => {
-    pathname.current = "/trip/abc";
-    render(
-      <AppShell>
-        <p>page body</p>
-      </AppShell>
-    );
-
-    const rail = screen.getByRole("navigation", { name: "Trip sections" });
-    expect(rail).toBeInTheDocument();
-    // Asserting the count, not the labels: the labels belong to lib/nav's test.
-    // This only pins that the rail renders every item it is given (C1).
-    expect(rail.querySelectorAll("a")).toHaveLength(4);
-  });
-
-  test("fills header slots on a trip route", () => {
-    pathname.current = "/trip/abc";
-    render(
-      <AppShell tripSwitcher={<button type="button">switch</button>}>
-        <p>page body</p>
-      </AppShell>
-    );
-    expect(screen.getByRole("button", { name: "switch" })).toBeInTheDocument();
-  });
-
-  test("withholds header slots off a trip route", () => {
-    // The slot content is passed but must not render: the trip zone describes a
-    // trip, and /plan has none. A switcher there would offer to switch away
-    // from nothing.
-    render(
-      <AppShell tripSwitcher={<button type="button">switch</button>}>
-        <p>page body</p>
-      </AppShell>
-    );
-    expect(screen.queryByRole("button", { name: "switch" })).not.toBeInTheDocument();
+    expect(within(screen.getByRole("banner")).getByRole("button", { name: "theme" })).toBeInTheDocument();
+    expect(screen.queryByLabelText("Display settings")).toBeNull();
   });
 });

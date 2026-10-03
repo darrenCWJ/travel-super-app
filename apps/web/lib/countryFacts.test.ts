@@ -1030,12 +1030,14 @@ describe("only the surfaces that read a fact pay for the artifact", () => {
    * Measured 2026-08-27: the layout's subtree fell from 41 modules to 18.
    */
   const ROOT_LAYOUT = "app/layout.tsx";
+  // ShareMenu was here until phase 1's slice A took it out of the shell; the
+  // shell's one remaining piece, the display settings, took its place.
   const ROOT_LAYOUT_SUBTREE = [
     ROOT_LAYOUT,
     "components/shell/AppShell.tsx",
     "components/shell/PrefsProvider.tsx",
-    "components/shell/ShareMenu.tsx",
     "components/shell/ShellTripContext.tsx",
+    "components/shell/ThemeToggle.tsx",
     "components/shell/TripAccentProvider.tsx",
     "lib/tripCountry.ts",
   ];
@@ -1091,9 +1093,10 @@ describe("only the surfaces that read a fact pay for the artifact", () => {
   });
 
   test("the in-app briefing is a chunk of its own, not part of the shell", () => {
-    // The other root-layout path: AppShell mounts ShareMenu on every route, and
-    // ShareMenu used to import `buildBriefing`, which resolves the gap note and
-    // therefore the artifact. A static import here is the whole defect.
+    // The other root-layout path, while AppShell mounted ShareMenu on every
+    // route (it is unmounted from phase 1's slice A until phase 4): ShareMenu
+    // used to import `buildBriefing`, which resolves the gap note and therefore
+    // the artifact. A static import here is the whole defect.
     const menu = FILES.find((file) => file.path === "components/shell/ShareMenu.tsx")!;
     expect(valueImportOf(menu.code, /lib\/briefing/)).toBe(false);
     // The dynamic import that replaced it. The walk does not count it as an
