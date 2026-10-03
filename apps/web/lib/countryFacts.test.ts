@@ -1045,10 +1045,11 @@ describe("only the surfaces that read a fact pay for the artifact", () => {
     // shape a broken walk produces for free.
     //
     // (1) An app/ entry point that genuinely DOES pay is still detected, so a
-    // walk that resolved no app/ specifier at all cannot pass here. /b/[code]
-    // calls buildBriefing server-side, which is allowed and is the point: the
-    // bytes are on the server, not in that page's client bundle.
-    expect(reaches(GRAPH, "app/b/[code]/page.tsx", ARTIFACT_READER)).toBe(true);
+    // walk that resolved no app/ specifier at all cannot pass here. The plan
+    // page pays through PlanStep, which reads facts for its tips and packing —
+    // the same reason it is on the paying list above. (This used to be
+    // /b/[code], retired with the store in phase 1's slice A.)
+    expect(reaches(GRAPH, "app/plan/page.tsx", ARTIFACT_READER)).toBe(true);
     // (2) The layout's own edges resolved. Pinned rather than counted: a new
     // root-layout import is 70 KB on every route if it reaches the artifact,
     // so admitting one should be a line in this diff.

@@ -848,8 +848,8 @@ describe("C7 — every surface that renders GeoNames data credits it", () => {
     },
     {
       path: "components/trip/BriefingView.tsx",
-      mountedIn: ["app/b/[code]/page.tsx", "components/shell/ShareBriefing.tsx"],
-      why: "Renders every day panel's destinationName. Both mounts credit it: the public bearer-link page in its footer, and the Share panel's briefing — which had no crediting ancestor until this contract learned to walk the mount graph.",
+      mountedIn: ["components/shell/ShareBriefing.tsx"],
+      why: "Renders every day panel's destinationName. Its one mount credits it: the Share panel's briefing, which had no crediting ancestor until this contract learned to walk the mount graph. The public bearer-link page that mounted it too is retired while the app is rebuilt (phase 1, slice A).",
     },
   ];
 
@@ -1197,7 +1197,6 @@ describe("C7 — every surface that renders GeoNames data credits it", () => {
     "app/plan/page.tsx",
     "components/DestinationStep.tsx",
     "components/TripView.tsx",
-    "app/b/[code]/page.tsx",
     "components/home/TripsDashboard.tsx",
     "components/shell/ShareBriefing.tsx",
   ])(
@@ -1205,7 +1204,7 @@ describe("C7 — every surface that renders GeoNames data credits it", () => {
     (path) => {
       // The enumerated floor, kept alongside the derived scan rather than
       // replaced by it: the derived scan proves no surface is UNCREDITED, and
-      // this proves these six named ones still exist to be credited at all. A
+      // this proves these named ones still exist to be credited at all. A
       // file deleted outright passes the derived scan vacuously.
       const file = FILES.find((f) => f.path === path);
       expect(file, `${path} is not in the scanned tree`).toBeDefined();

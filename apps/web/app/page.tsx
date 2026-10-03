@@ -1,26 +1,13 @@
-import Link from "next/link";
-import { TripsDashboard } from "@/components/home/TripsDashboard";
+import { BeingRebuilt, REBUILDING_METADATA } from "@/components/BeingRebuilt";
+
+/**
+ * The home page while the app is rebuilt. The trips dashboard it used to show
+ * needs sign-in and the retired store, so this links to the one part that
+ * still works, the destination explorer on /plan. Production never renders
+ * this: `proxy.ts` sends every path there to /rebuilding, which has no link.
+ */
+export const metadata = REBUILDING_METADATA;
 
 export default function Home() {
-  return (
-    <main className="mx-auto max-w-6xl px-4 pb-24 pt-8">
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <p className="font-mono text-xs uppercase tracking-[0.3em] text-[var(--accent-ink)]">
-            Your trips
-          </p>
-          <h1 className="mt-1 font-display text-3xl font-bold [text-wrap:balance]">
-            Where are we going?
-          </h1>
-        </div>
-        <Link
-          href="/plan"
-          className="flex min-h-[var(--tap-min)] items-center rounded-lg bg-[var(--accent-ink)] px-5 text-sm font-semibold text-[var(--paper)] transition-colors hover:bg-[color-mix(in_oklab,var(--accent-ink)_85%,var(--ink-0))]"
-        >
-          Plan a new trip →
-        </Link>
-      </div>
-      <TripsDashboard />
-    </main>
-  );
+  return <BeingRebuilt showExplorerLink />;
 }
