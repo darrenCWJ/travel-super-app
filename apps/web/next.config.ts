@@ -31,9 +31,12 @@ const nextConfig: NextConfig = {
    * parsers throw loudly rather than degrade. A shape change is not, and the
    * picker's own "Try again" would re-request the same cached copy.
    *
-   * Note the wall interacts with this: `proxy.ts` puts everything under `public/`
-   * behind the login redirect, and that redirect is `no-store` precisely so a
-   * signed-out request cannot park a day-long cached bounce in front of the asset.
+   * Note the proxy interacts with this: in production `proxy.ts` rewrites
+   * everything under `public/` to the "being rebuilt" page, and that rewrite is
+   * `no-store` precisely so a day-long cached copy of the page cannot sit in
+   * front of the asset once the rebuild lands. Checked with `next start` on
+   * 2026-10-03: the rewrite's `no-store` replaces this header on
+   * `/world-globe.json` rather than joining it.
    */
   async headers() {
     return [

@@ -1,6 +1,4 @@
-import { mkdirSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join, sep } from "node:path";
+import { sep } from "node:path";
 import { defineConfig, devices } from "@playwright/test";
 
 /**
@@ -15,34 +13,18 @@ import { defineConfig, devices } from "@playwright/test";
  *
  * These specs measure the rendered box instead. They are deliberately few:
  * the value is in the things jsdom structurally cannot answer — real layout,
- * real CSS, a real navigation through the login wall — and not in restating
- * what 2,368 unit tests already hold.
+ * real CSS, the routes a real browser actually reaches — and not in restating
+ * what the unit tests already hold.
+ *
+ * Every spec runs signed out. Sign-in, the store and the trip pages are retired
+ * while the app is rebuilt (phase 1, slice A), so there is no session to set
+ * up and nothing that needs one: the explorer on /plan and the "being rebuilt"
+ * pages are all there is to test.
  *
  * Port 3100 rather than 3000, and pinned rather than `autoPort`: `baseURL` has
  * to be known before the server starts, and 3000 is the port a developer is
  * most likely to already be using.
  */
-
-/**
- * A throwaway SQLite file, so a run never touches `data/app.db`.
- *
- * `lib/server/db.ts` reads `CIP_DB_PATH` and creates its schema on open, so
- * pointing it at an empty directory is the whole of the setup — trips and
- * Better Auth's own `user`/`session`/`account` tables all follow it.
- */
-const dbDir = join(tmpdir(), "cip-e2e");
-mkdirSync(dbDir, { recursive: true });
-
-/**
- * Long enough for `lib/authSecret.ts` (24 char minimum) and not one of the
- * placeholders it rejects — the blocklist there includes the literal
- * "test-secret", which is exactly what one reaches for first.
- *
- * It signs sessions in a throwaway database on a developer's own machine, so
- * it is a fixture rather than a credential. CI passes the same value as a
- * plain `env:` entry for the same reason.
- */
-const E2E_SECRET = "e2e-fixture-k3Nv8xQ2mR7pL0wZaB6tY4hJ";
 
 /**
  * The checkouts nested inside this one, under `.claude/worktrees/<name>/`.
@@ -73,6 +55,9 @@ function escapeRegExp(text: string): string {
   return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+/** §5.3's tap targets are a claim about phones, so their spec runs at a phone width. */
+const PHONE_SPECS = /tap-targets\.spec\.ts/;
+
 export default defineConfig({
   testDir: "./e2e",
   testIgnore: [nestedCheckouts, "**/node_modules/**"],
@@ -99,58 +84,35 @@ export default defineConfig({
   },
 
   projects: [
-    // Signs up once and saves the session; every authenticated spec reuses it
-    // rather than driving the form again.
-    { name: "setup", testMatch: /auth\.setup\.ts/ },
     {
-      // Signed IN. Scoped with `testMatch` rather than left to collect every
-      // spec: without it this project also picks up `wall.spec.ts`, which
-      // exists to test the signed-out redirect and cannot pass while holding a
-      // session — it fails as a timeout, which reads like a broken app.
-      // gateways.spec.ts creates trips through the API with the saved
-      // session, so it belongs to the signed-in project too. climate.spec.ts
-      // drives the wizard through the world level to Peru with the saved
-      // session, so it belongs here too. tickets.spec.ts also creates a trip
-      // through the API under the saved session, so it belongs here as well.
+      // Every spec but the phone one, at a desktop width. Selected by
+      // exclusion, so a new spec runs here without anyone remembering to list it.
       name: "chromium",
-      testMatch: /(map|gateways|climate|tickets)\.spec\.ts/,
-      use: { ...devices["Desktop Chrome"], storageState: "e2e/.auth/user.json" },
-      dependencies: ["setup"],
-    },
-    {
-      // The wall's own spec runs signed OUT, so it takes no storage state and
-      // no dependency on the setup above. fonts.spec.ts joins it: the fonts
-      // belong to the root layout, so /login shows them without a session,
-      // and fetching the preloads signed out is part of what it checks.
-      name: "signed-out",
-      testMatch: /(wall|fonts)\.spec\.ts/,
+      testIgnore: PHONE_SPECS,
       use: { ...devices["Desktop Chrome"] },
     },
     {
-      // §5.3's tap targets are a claim about phones, so the spec that measures
-      // them runs at a phone width. 390px is the iPhone 12/13/14 CSS width and
-      // the figure the unit tests quote.
+      // 390px is the iPhone 12/13/14 CSS width and the figure the unit tests quote.
       name: "mobile",
-      testMatch: /tap-targets\.spec\.ts/,
-      use: { ...devices["Pixel 5"], storageState: "e2e/.auth/user.json" },
-      dependencies: ["setup"],
+      testMatch: PHONE_SPECS,
+      use: { ...devices["Pixel 5"] },
     },
   ],
 
   webServer: {
     command: "pnpm exec next dev -p 3100",
-    url: "http://localhost:3100/login",
+    url: "http://localhost:3100/",
     reuseExistingServer: !process.env.CI,
     timeout: 180_000,
     env: {
-      BETTER_AUTH_SECRET: E2E_SECRET,
-      BETTER_AUTH_URL: "http://localhost:3100",
-      CIP_DB_PATH: join(dbDir, "e2e.db"),
-      // Unset deliberately. `lib/authSecret.ts` only treats a bad secret as
-      // fatal when VERCEL is truthy, and `lib/wall.ts` turns the wall OFF
-      // entirely when the secret is absent — so leaving either to chance would
-      // silently test a different app than the one that deploys.
+      // `next dev` runs as development whatever the shell says, and so does the
+      // Vercel environment `proxy.ts` reads: with VERCEL_ENV=production it
+      // rewrites every path to /rebuilding and no explorer spec could pass.
+      // Next never overrides a variable that is already set with one from a
+      // .env file, so this also outranks a production .env.local pulled with
+      // `vercel env pull`.
       NODE_ENV: "development",
+      VERCEL_ENV: "development",
     },
   },
 });

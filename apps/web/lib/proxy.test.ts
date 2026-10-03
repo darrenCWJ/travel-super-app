@@ -1,6 +1,13 @@
-import { afterEach, beforeEach, describe, expect, test } from "vitest";
+import { afterEach, describe, expect, test } from "vitest";
 import { NextRequest } from "next/server";
-import { getPathMatch } from "next/dist/shared/lib/router/utils/path-match";
+// `unstable_doesMiddlewareMatch`, not the `unstable_doesProxyMatch` that
+// Next 16.3.6's own proxy.md names: that export does not exist in this release
+// (only the docs mention it). This is the same function under its old name.
+import {
+  getRewrittenUrl,
+  isRewrite,
+  unstable_doesMiddlewareMatch,
+} from "next/experimental/testing/server";
 import { config, proxy } from "@/proxy";
 
 /**
@@ -9,113 +16,87 @@ import { config, proxy } from "@/proxy";
  * node project already picks up, and proxy.ts is plain Node-runnable logic
  * (NextRequest/NextResponse work outside an actual Next server).
  *
- * wallDecision's branching is already exhaustively covered by
- * lib/wall.test.ts. This file covers what that pure function can't: the
- * headers proxy.ts itself attaches to the NextResponse it builds around that
- * decision — specifically the no-store on the /login redirect, regression
- * coverage for the bug where next.config.ts's 24h public cache on the
- * topology assets rode along on this same redirect for signed-out visitors.
+ * While the app is rebuilt (phase 1, slice A) the proxy is production's
+ * switch: there, every path it sees becomes the "being rebuilt" page. On a
+ * preview and in local development it passes everything through, so the
+ * explorer keeps working where it is tested.
  */
 
 const ORIGINAL_ENV = { ...process.env };
 
-function resetEnv() {
+afterEach(() => {
   process.env = { ...ORIGINAL_ENV };
+});
+
+function inVercelEnv(value: string | undefined) {
+  if (value === undefined) delete process.env.VERCEL_ENV;
+  else process.env.VERCEL_ENV = value;
 }
 
-describe("proxy redirect response headers", () => {
-  beforeEach(() => {
-    resetEnv();
-    process.env.BETTER_AUTH_SECRET = "a".repeat(32);
-    delete process.env.VERCEL;
-    delete process.env.ACCESS_CODE;
-  });
+describe("in production, every path is the being-rebuilt page", () => {
+  test.each([
+    "/",
+    "/plan",
+    "/api/destinations?q=lima&country=PE",
+    "/world-globe.json",
+    "/trip/abc",
+  ])("rewrites %s to /rebuilding, and keeps it out of every cache", async (path) => {
+    inVercelEnv("production");
+    const res = await proxy(new NextRequest(`https://example.com${path}`));
 
-  afterEach(resetEnv);
-
-  test("a signed-out redirect carries Cache-Control: no-store", async () => {
-    // Regression coverage: without no-store, this redirect (307, same
-    // target and query as always) was cacheable by any downstream cache —
-    // browser or shared proxy — for the topology assets' 24h window, so a
-    // signed-out hit could park a redirect-to-/login that outlives the
-    // sign-in that was supposed to fix it.
-    const req = new NextRequest("https://example.com/world-globe.json");
-    const res = await proxy(req);
-
-    expect(res.status).toBe(307);
-    expect(res.headers.get("location")).toBe(
-      "https://example.com/login?next=%2Fworld-globe.json"
-    );
-    expect(res.headers.get("Cache-Control")).toBe("no-store");
-  });
-
-  test("a signed-out city-shard request redirects, uncached", async () => {
-    // The cached-redirect interaction above, now extended to 248 more URLs.
-    // next.config.ts gives /cities/* a six-hour `public` cache; without
-    // no-store on this redirect, a signed-out hit parks a redirect-to-/login
-    // under a shard URL for hours — and unlike the topology assets,
-    // fetchCityShard keeps no module-level cache to fall back on (it relies on
-    // that very header). Same bug as /world-globe.json, larger blast radius.
-    const req = new NextRequest("https://example.com/cities/PE.json");
-    const res = await proxy(req);
-
-    expect(res.status).toBe(307);
-    expect(res.headers.get("location")).toBe(
-      "https://example.com/login?next=%2Fcities%2FPE.json"
-    );
-    expect(res.headers.get("Cache-Control")).toBe("no-store");
-  });
-
-  test("the redirect target, status, and next= param are unchanged by the header fix", async () => {
-    const req = new NextRequest("https://example.com/trip/abc123?foo=bar");
-    const res = await proxy(req);
-
-    expect(res.status).toBe(307);
-    expect(res.headers.get("location")).toBe(
-      "https://example.com/login?next=%2Ftrip%2Fabc123%3Ffoo%3Dbar"
-    );
+    expect(isRewrite(res)).toBe(true);
+    expect(getRewrittenUrl(res)).toBe("https://example.com/rebuilding");
+    // next.config.ts gives the topology assets a day-long public cache, and
+    // its headers run before the proxy. A cached "being rebuilt" answer under
+    // an asset's URL would outlive the rebuild.
     expect(res.headers.get("Cache-Control")).toBe("no-store");
   });
 });
 
+describe("everywhere else, the proxy stands aside", () => {
+  test.each([["preview"], ["development"], [undefined]])(
+    "VERCEL_ENV=%s passes every path through",
+    async (value) => {
+      inVercelEnv(value);
+      for (const path of ["/", "/plan", "/api/destinations", "/world-globe.json"]) {
+        const res = await proxy(new NextRequest(`https://example.com${path}`));
+        expect(isRewrite(res), path).toBe(false);
+        // What `NextResponse.next()` sets: carry on to the route itself.
+        expect(res.headers.get("x-middleware-next"), path).toBe("1");
+      }
+    }
+  );
+});
+
 /**
- * The other half of the wall, and the half nothing asserted before this.
+ * Which paths the proxy is asked about at all. A path the matcher excludes is
+ * a path production would serve in full, so the exemptions stay the three
+ * build-output ones and nothing else.
  *
- * `wallDecision` is never consulted for a path the matcher excludes, so every
- * `/cities/` assertion in lib/wall.test.ts — and the proxy() round trip above,
- * which calls the handler directly — stays green if someone adds `/cities/` to
- * the negative lookahead in proxy.ts's `config.matcher`, right beside
- * `_next/static`, `_next/image` and `favicon.ico`: the first place a future dev
- * would look, and the change that would publish 6.5 MB outside the wall.
- *
- * Compiled with the same vendored matcher Next itself uses on this field, so
- * these are the real semantics, not a regex re-implementation.
+ * Compiled the way Next compiles a proxy's matcher, through the testing
+ * helper above, so these are the real semantics rather than a regex
+ * re-implementation.
  */
-describe("proxy matcher — which paths the wall is even asked about", () => {
-  const matcher = getPathMatch(config.matcher[0], {});
-  const seen = (pathname: string) => matcher(pathname) !== false;
+describe("proxy matcher", () => {
+  const seen = (url: string) => unstable_doesMiddlewareMatch({ config, url });
 
-  test("the city shards reach the wall", () => {
-    for (const pathname of [
+  test("sees every page, route and public file", () => {
+    for (const path of [
+      "/",
+      "/plan",
+      "/rebuilding",
+      "/trip/abc123",
+      "/api/destinations",
+      "/world-globe.json",
       "/cities/PE.json",
-      "/cities/index.json",
-      "/cities/enrich/PE.json",
     ]) {
-      expect(seen(pathname), pathname).toBe(true);
+      expect(seen(path), path).toBe(true);
     }
   });
 
-  test("the topology assets and app pages reach it too", () => {
-    for (const pathname of ["/world-globe.json", "/", "/plan", "/trip/abc123"]) {
-      expect(seen(pathname), pathname).toBe(true);
-    }
-  });
-
-  test("only the three build-output exemptions are excluded", () => {
-    // Documented in proxy.ts: this matcher exempts framework output and
-    // favicon.ico by name, nothing else. Anything added here is a hole.
-    for (const pathname of ["/_next/static/chunk.js", "/_next/image", "/favicon.ico"]) {
-      expect(seen(pathname), pathname).toBe(false);
+  test("excludes only the three build-output exemptions", () => {
+    for (const path of ["/_next/static/chunk.js", "/_next/image", "/favicon.ico"]) {
+      expect(seen(path), path).toBe(false);
     }
   });
 });
