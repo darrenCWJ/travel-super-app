@@ -12,6 +12,11 @@ import { AppShell } from "./AppShell";
  * account chip, the trip zone and the rail served sign-in and the trip pages,
  * which are retired; their components stay, unmounted, until phase 4.
  *
+ * The cases below look for the trip switcher and the rail. The account chip,
+ * CrewMenu and ShareMenu render nothing in jsdom without a session or a trip,
+ * so a render cannot show that they are absent; lib/countryFacts.test.ts pins
+ * the shell's imports instead.
+ *
  * The route is mocked even though the shell no longer reads it, so that each
  * case below really is that route: the cases are the routes that used to get
  * a different frame — bare on /login, /signup and /b/, a rail on /trip/.
@@ -20,8 +25,6 @@ const pathname = vi.hoisted(() => ({ current: "/" }));
 
 vi.mock("next/navigation", () => ({
   usePathname: () => pathname.current,
-  useSearchParams: () => new URLSearchParams(),
-  useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
 }));
 
 function renderShellAt(path: string) {
@@ -51,11 +54,9 @@ describe("AppShell", () => {
     }
   );
 
-  test.each(["/plan", "/trip/abc"])("renders no account chip, trip zone or rail on %s", (path) => {
+  test.each(["/plan", "/trip/abc"])("renders no trip switcher or rail on %s", (path) => {
     renderShellAt(path);
 
-    expect(screen.queryByRole("link", { name: "Sign in" })).toBeNull();
-    expect(screen.queryByRole("button", { name: /Account menu/ })).toBeNull();
     expect(screen.queryByLabelText("Switch trip")).toBeNull();
     expect(screen.queryByRole("navigation", { name: "Trip sections" })).toBeNull();
   });

@@ -1060,6 +1060,13 @@ describe("only the surfaces that read a fact pay for the artifact", () => {
       "components/shell/ShellTripContext.tsx",
       "components/shell/TripAccentProvider.tsx",
     ]);
+    // The shell's own edges, one hop down. Since phase 1's slice A it frames
+    // every route with the display settings alone. The account chip,
+    // CrewMenu and ShareMenu render nothing without a session or a trip, so
+    // AppShell.test.tsx cannot show them absent, but an import edge can.
+    expect([...(GRAPH.get("components/shell/AppShell.tsx") ?? [])].sort()).toEqual([
+      "components/shell/ThemeToggle.tsx",
+    ]);
     // (3) The paths listed below are real files, not typos that can never fail.
     const scanned = FILES.map((file) => file.path);
     for (const path of ROOT_LAYOUT_SUBTREE) expect(scanned).toContain(path);
