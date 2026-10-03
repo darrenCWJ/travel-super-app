@@ -729,7 +729,13 @@ function c7AllowedLiteral(text: string): string {
   return bracketSlice(text, openIndex);
 }
 
-/** The six-file `test.each([` GeoNamesCredit floor (contracts.test.ts:1174-1181). */
+/**
+ * The `test.each([` GeoNamesCredit floor in contracts.test.ts, the only
+ * `test.each([` call there. Five paths since phase 1's slice A retired
+ * app/b/[code]/page.tsx; the count is what proves the right literal was read.
+ */
+const CREDIT_FLOOR_SIZE = 5;
+
 function shareBriefingFloorLiteral(text: string): string {
   const marker = "test.each([";
   const markerIndex = text.indexOf(marker);
@@ -737,9 +743,12 @@ function shareBriefingFloorLiteral(text: string): string {
   const openIndex = markerIndex + marker.length - 1;
   const body = bracketSlice(text, openIndex);
   const paths = [...body.matchAll(/"([^"]*)"/g)].map((m) => m[1]);
-  if (paths.length !== 6 || paths[paths.length - 1] !== "components/shell/ShareBriefing.tsx") {
+  if (
+    paths.length !== CREDIT_FLOOR_SIZE ||
+    paths[paths.length - 1] !== "components/shell/ShareBriefing.tsx"
+  ) {
     throw new Error(
-      `lib/contracts.test.ts: expected the six-path GeoNamesCredit floor ending in ` +
+      `lib/contracts.test.ts: expected the ${CREDIT_FLOOR_SIZE}-path GeoNamesCredit floor ending in ` +
         `ShareBriefing.tsx, got ${JSON.stringify(paths)} — is this still the only test.each([ call?`
     );
   }
@@ -778,7 +787,7 @@ describe("the climate artifact adds nothing to the CC BY attribution machinery",
     expect(MENTIONS_CLIMATE_OR_CHELSA.test(c7AllowedLiteral(CONTRACTS_TEST_TEXT))).toBe(false);
   });
 
-  test("the six-file GeoNamesCredit floor names no climate surface", () => {
+  test("the GeoNamesCredit floor names no climate surface", () => {
     expect(MENTIONS_CLIMATE_OR_CHELSA.test(shareBriefingFloorLiteral(CONTRACTS_TEST_TEXT))).toBe(false);
   });
 

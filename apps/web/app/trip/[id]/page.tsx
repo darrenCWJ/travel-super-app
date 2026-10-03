@@ -1,11 +1,11 @@
-import type { Metadata } from "next";
-import { TripView } from "@/components/TripView";
+import { BeingRebuilt, REBUILDING_METADATA } from "@/components/BeingRebuilt";
 
-export const metadata: Metadata = {
-  title: "Shared trip — Itinerary Planner",
-};
+/**
+ * Retired with the old store and sign-in (phase 1, slice A); answers with the
+ * "being rebuilt" page until its replacement lands.
+ */
+export const metadata = REBUILDING_METADATA;
 
-export default async function TripPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
-  return <TripView tripId={id} />;
+export default function Page() {
+  return <BeingRebuilt />;
 }

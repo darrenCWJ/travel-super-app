@@ -23,8 +23,8 @@ import { test, expect } from "@playwright/test";
  *   every unicode-range stripped from fonts.css, /login still fetched just
  *   the four.)
  *
- * Signed out, on /login: the fonts belong to the root layout, and this is the
- * page the wall always serves.
+ * On the home page: the fonts belong to the root layout, so any page shows
+ * them, and the home page is the one every visitor reaches.
  */
 
 /** A few glyphs from each subset, all of which these fonts actually contain. */
@@ -68,8 +68,8 @@ const FAMILIES: { variable: string; font: string; weights: number[]; subsets: Su
 const unquote = (family: string) => family.trim().replace(/^["']|["']$/g, "");
 
 test("every subset of every family draws in its own font, through its CSS variable", async ({ page }) => {
-  await page.goto("/login");
-  await expect(page.getByLabel("Email")).toBeVisible();
+  await page.goto("/");
+  await expect(page.getByRole("heading", { level: 1, name: "Being rebuilt" })).toBeVisible();
 
   // Each variable is the latin family next/font owns, then the family
   // fonts.css declares, then that family's metric-matched Arial.
@@ -151,7 +151,7 @@ test("every subset of every family draws in its own font, through its CSS variab
 });
 
 test("only the four vendored latin files are preloaded", async ({ page }) => {
-  await page.goto("/login");
+  await page.goto("/");
 
   const hrefs = await page
     .locator('link[rel="preload"][as="font"]')
@@ -171,7 +171,6 @@ test("only the four vendored latin files are preloaded", async ({ page }) => {
   }
 
   // By content, not by name: the emitted filenames are next/font's business.
-  // Fetched signed out, so this also shows the wall lets them through.
   const sha256 = (bytes: Buffer) => createHash("sha256").update(bytes).digest("hex");
   const preloaded = await Promise.all(
     hrefs.map(async ({ href }) => {
