@@ -55,7 +55,7 @@ const SPARQL_ENDPOINT = "https://query.wikidata.org/sparql";
  * network rather than a runner's, and a name is all Wikimedia has to tell the
  * two apart.
  */
-const USER_AGENT = "china-itinerary-planner/city-enrichment (+https://github.com/darrenCWJ/china-itinerary-planner)";
+const USER_AGENT = "travel-super-app/city-enrichment (+https://github.com/darrenCWJ/travel-super-app)";
 const TIMEOUT_MS = 15_000;
 /**
  * A user is waiting on this, so it is one round trip and no retries.

@@ -36,7 +36,7 @@ const ENWIKI_ACTION_API = 'https://en.wikipedia.org/w/api.php';
  * HTTP 403 from Wikidata that day — scripts/user-agent.test.ts has the finding
  * and pins this form across the tree.
  */
-const USER_AGENT = 'china-itinerary-planner/enrich-cities (+https://github.com/darrenCWJ/china-itinerary-planner)';
+const USER_AGENT = 'travel-super-app/enrich-cities (+https://github.com/darrenCWJ/travel-super-app)';
 
 const SPARQL_TIMEOUT_MS = 90_000;
 const REST_TIMEOUT_MS = 30_000;

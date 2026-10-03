@@ -34,7 +34,7 @@ const REPORT_PATH = join(DATA_DIR, 'catalog-report.md');
 const SPARQL_ENDPOINT = 'https://query.wikidata.org/sparql';
 const ENWIKI_ACTION_API = 'https://en.wikipedia.org/w/api.php';
 /** Contact information, as Wikimedia's User-Agent policy requires of both hosts above — scripts/user-agent.test.ts. */
-const USER_AGENT = 'china-itinerary-planner/ingest-destinations (+https://github.com/darrenCWJ/china-itinerary-planner)';
+const USER_AGENT = 'travel-super-app/ingest-destinations (+https://github.com/darrenCWJ/travel-super-app)';
 
 const SPARQL_TIMEOUT_MS = 90_000;
 const REST_TIMEOUT_MS = 30_000;

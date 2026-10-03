@@ -57,7 +57,7 @@ const ADMIN1_URL = 'https://download.geonames.org/export/dump/admin1CodesASCII.t
  */
 export const SOURCE_LICENSE = 'GeoNames cities500 (CC BY 4.0)';
 export const SOURCE_ATTRIBUTION = 'https://www.geonames.org/ — CC BY 4.0';
-const USER_AGENT = 'china-itinerary-planner/ingest-cities (+https://github.com/darrenCWJ/china-itinerary-planner)';
+const USER_AGENT = 'travel-super-app/ingest-cities (+https://github.com/darrenCWJ/travel-super-app)';
 
 /** 13.5 MB over a CI network. Airports' 120s is not enough headroom for it. */
 const FETCH_TIMEOUT_MS = 300_000;

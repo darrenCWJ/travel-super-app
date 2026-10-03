@@ -408,7 +408,7 @@ const SHARD_DIR = join(process.cwd(), 'public', 'cities');
 const CURATED_PATH = join(process.cwd(), 'public', 'china-provinces.json');
 const REPORT_PATH = join(process.cwd(), 'data', 'provinces-report.md');
 const RETRY_DELAYS_MS = [2000, 8000];
-const USER_AGENT = 'china-itinerary-planner/build-provinces (+https://github.com/darrenCWJ/china-itinerary-planner)';
+const USER_AGENT = 'travel-super-app/build-provinces (+https://github.com/darrenCWJ/travel-super-app)';
 
 /**
  * Write via a PID-suffixed temp file, removing the destination first.

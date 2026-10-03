@@ -88,7 +88,7 @@ describe("fetchWithRetry", () => {
     viTop.stubGlobal("fetch", fetchSpy);
     await fetchWithRetry("https://example.invalid/sparql", { body: "query=x", accept: "text/csv" });
     expect(new Headers(fetchSpy.mock.calls[0][1].headers).get("user-agent")).toBe(
-      "china-itinerary-planner/ingest-country-facts (+https://github.com/darrenCWJ/china-itinerary-planner)"
+      "travel-super-app/ingest-country-facts (+https://github.com/darrenCWJ/travel-super-app)"
     );
   });
 

@@ -1,6 +1,6 @@
 # China Itinerary Planner 游
 
-**Live**: <https://china-itinerary-planner.vercel.app> · **Source**: <https://github.com/darrenCWJ/china-itinerary-planner>
+**Live**: <https://china-itinerary-planner.vercel.app> · **Source**: <https://github.com/darrenCWJ/travel-super-app>
 
 Plan a trip to any country in three steps — pick places on a globe and a
 country map, say when and who is going, get a day-by-day plan — then take

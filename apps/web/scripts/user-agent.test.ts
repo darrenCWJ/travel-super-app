@@ -92,7 +92,7 @@ function declarationsIn(text: string): string[] {
  * refuses an email address added after the URL, not only a missing URL.
  */
 const CONTACT_FORM =
-  /^china-itinerary-planner\/[a-z0-9]+(?:-[a-z0-9]+)* \(\+https:\/\/github\.com\/darrenCWJ\/china-itinerary-planner\)$/;
+  /^travel-super-app\/[a-z0-9]+(?:-[a-z0-9]+)* \(\+https:\/\/github\.com\/darrenCWJ\/travel-super-app\)$/;
 
 /**
  * A Wikimedia project host in a URL, http or https, with any subdomain — a
@@ -203,12 +203,15 @@ describe("every outbound User-Agent carries contact information", () => {
     expect(offenders).toEqual([]);
   });
 
-  it("the retired User-Agent is gone from the code, in whatever syntax", () => {
-    // docs/ keeps it on purpose — a plan is a record of what it prescribed —
-    // and a plan is exactly where a new script would copy it from. The checks
+  it("the retired User-Agents are gone from the code, in whatever syntax", () => {
+    // docs/ keeps them on purpose — a plan is a record of what it prescribed —
+    // and a plan is exactly where a new script would copy one from. The checks
     // above only see the declaration shapes; this sees any spelling, comments
-    // included, which is why no source file quotes it even to explain it.
-    const stale = FILES.filter((file) => file.text.includes("ChinaItineraryPlanner/")).map((file) => file.path);
+    // included, which is why no source file quotes either even to explain it.
+    // The second is the product token from before the repo was renamed to
+    // travel-super-app.
+    const RETIRED = ["ChinaItineraryPlanner/", "china-itinerary-planner/"];
+    const stale = FILES.filter((file) => RETIRED.some((token) => file.text.includes(token))).map((file) => file.path);
     expect(stale).toEqual([]);
   });
 
@@ -224,11 +227,13 @@ describe("every outbound User-Agent carries contact information", () => {
 
     expect(retired).not.toMatch(CONTACT_FORM);
     expect(
-      "china-itinerary-planner/enrich-cities (+https://github.com/darrenCWJ/china-itinerary-planner; ops@example.invalid)"
+      "travel-super-app/enrich-cities (+https://github.com/darrenCWJ/travel-super-app; ops@example.invalid)"
     ).not.toMatch(CONTACT_FORM);
-    expect("china-itinerary-planner/build-provinces (+https://github.com/darrenCWJ/china-itinerary-planner)").toMatch(
-      CONTACT_FORM
-    );
+    expect("travel-super-app/build-provinces (+https://github.com/darrenCWJ/travel-super-app)").toMatch(CONTACT_FORM);
+    // The form from before the rename is refused too, so it cannot come back.
+    expect(
+      "china-itinerary-planner/build-provinces (+https://github.com/darrenCWJ/china-itinerary-planner)"
+    ).not.toMatch(CONTACT_FORM);
   });
 
   it("still recognises a Wikimedia caller that builds its host or goes through a helper", () => {
