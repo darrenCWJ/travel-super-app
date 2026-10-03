@@ -34,7 +34,11 @@ Copied from the spec, and from facts checked on 2026-10-03. Every task's require
 - **Merges are rebase-merges.** After every merge, rebase the next branch on `main` and re-run CI. Before deleting a branch, check that `gh pr view <n> --json state` says `MERGED`.
 - **Never require `ci-ok` on `main`.** The refresh workflows push with the default token and get no CI run, so a required check would refuse their pushes (phase 0's execution record).
 - **Commits:** conventional (`feat:`, `fix:`, `chore:`, `refactor:`, `test:`, `docs:`), each ending with `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`.
-- **Commit messages go through a pipe.** PowerShell 5.1 splits a `-m` argument at every embedded double quote, so `git commit -m @'…'@` fails on half of this plan's messages. Every commit below runs `$OutputEncoding = New-Object System.Text.UTF8Encoding $false` first, then pipes the message to `git commit -F -`. Without that first line, `—` and `§` arrive as `?`. Both lines were run on 2026-10-03.
+- **Commit messages go through a pipe.** PowerShell 5.1 splits a `-m` argument at every embedded double quote, so `git commit -m @'…'@` fails on half of this plan's messages. Every commit below first sets two encodings, then pipes the message to `git commit -F -`:
+  - `$OutputEncoding = New-Object System.Text.UTF8Encoding $false`. Without it, `—` and `§` arrive as `?`.
+  - `[Console]::InputEncoding = New-Object System.Text.UTF8Encoding $false`. Without it, a host whose console encoding carries a byte-order mark (the agents' PowerShell tool does) puts `EF BB BF` before the message's first letter. Task 1's first commit got one that way, on 2026-10-03.
+
+  After every commit, `[int][char](git log -1 --format="x%B")[0][1]` must print the code of the message's first letter: 99 (`c`), 100 (`d`), 102 (`f`) or 114 (`r`). It must never print 65279, which is a byte-order mark. If it does, amend the unpushed commit with the encodings set.
 - **Applying the diffs below.** Use the Edit tool. If you use `git apply` instead, run `git apply --cached <patch>` and then `git checkout -- <files>`. A plain `git apply` fails, because the working copies are CRLF and the patches are not.
 - **`next-env.d.ts`.** `next dev` and `next build` rewrite `apps/web/next-env.d.ts`. Put it back with `git checkout -- apps/web/next-env.d.ts` before every commit; it is never part of this slice's changes.
 - **Files stay under 800 lines**, except the five test files the owner already exempted.
@@ -458,6 +462,7 @@ git status --short
 
 ```powershell
 $OutputEncoding = New-Object System.Text.UTF8Encoding $false
+[Console]::InputEncoding = New-Object System.Text.UTF8Encoding $false
 @'
 chore: replace the old repo name with travel-super-app
 
@@ -671,6 +676,7 @@ A  apps/web/components/BeingRebuilt.tsx
 
 ```powershell
 $OutputEncoding = New-Object System.Text.UTF8Encoding $false
+[Console]::InputEncoding = New-Object System.Text.UTF8Encoding $false
 @'
 feat: add the "being rebuilt" page
 
@@ -1067,6 +1073,7 @@ M  apps/web/proxy.ts
 
 ```powershell
 $OutputEncoding = New-Object System.Text.UTF8Encoding $false
+[Console]::InputEncoding = New-Object System.Text.UTF8Encoding $false
 @'
 feat: switch production to "being rebuilt" and run browser tests signed out
 
@@ -1442,6 +1449,7 @@ M  apps/web/scripts/cities/report.mjs
 
 ```powershell
 $OutputEncoding = New-Object System.Text.UTF8Encoding $false
+[Console]::InputEncoding = New-Object System.Text.UTF8Encoding $false
 @'
 feat: answer "being rebuilt" on the retired pages
 
@@ -1837,6 +1845,7 @@ M  apps/web/lib/countryFacts.test.ts
 
 ```powershell
 $OutputEncoding = New-Object System.Text.UTF8Encoding $false
+[Console]::InputEncoding = New-Object System.Text.UTF8Encoding $false
 @'
 refactor: let the shell and preferences stand alone
 
@@ -2841,6 +2850,7 @@ M  apps/web/lib/contracts.test.ts
 
 ```powershell
 $OutputEncoding = New-Object System.Text.UTF8Encoding $false
+[Console]::InputEncoding = New-Object System.Text.UTF8Encoding $false
 @'
 feat: let the explorer stand alone
 
@@ -3288,6 +3298,7 @@ M  tools/boundaries/src/repo.test.ts
 
 ```powershell
 $OutputEncoding = New-Object System.Text.UTF8Encoding $false
+[Console]::InputEncoding = New-Object System.Text.UTF8Encoding $false
 @'
 refactor: delete the old store, accounts and their routes
 
@@ -3567,6 +3578,7 @@ M  apps/web/lib/worldwidePlan.test.ts
 
 ```powershell
 $OutputEncoding = New-Object System.Text.UTF8Encoding $false
+[Console]::InputEncoding = New-Object System.Text.UTF8Encoding $false
 @'
 refactor: delete what only the retired code used
 
@@ -3770,6 +3782,7 @@ M  pnpm-workspace.yaml
 
 ```powershell
 $OutputEncoding = New-Object System.Text.UTF8Encoding $false
+[Console]::InputEncoding = New-Object System.Text.UTF8Encoding $false
 @'
 chore: drop the packages and settings the old store needed
 
@@ -4999,6 +5012,7 @@ Expected: the 39 files of this task, each `M`, and nothing else:
 
 ```powershell
 $OutputEncoding = New-Object System.Text.UTF8Encoding $false
+[Console]::InputEncoding = New-Object System.Text.UTF8Encoding $false
 @'
 docs: say what the app is while it is rebuilt
 
