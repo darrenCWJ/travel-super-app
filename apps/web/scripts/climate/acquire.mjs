@@ -125,7 +125,7 @@ export function readCatalog() {
 
 const RETRY_DELAYS_MS = [2000, 8000];
 const USER_AGENT =
-  'china-itinerary-planner/ingest-climate (+https://github.com/darrenCWJ/china-itinerary-planner)';
+  'travel-super-app/ingest-climate (+https://github.com/darrenCWJ/travel-super-app)';
 
 /**
  * A ceiling on one download, scaled to the file rather than fixed.

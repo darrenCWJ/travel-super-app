@@ -114,7 +114,7 @@ describe("enrichCities", () => {
     const init = mock.mock.calls[0]?.[1] as RequestInit | undefined;
     // Through `Headers`, because header names are case-insensitive on the wire.
     expect(new Headers(init?.headers).get("user-agent")).toBe(
-      "china-itinerary-planner/city-enrichment (+https://github.com/darrenCWJ/china-itinerary-planner)"
+      "travel-super-app/city-enrichment (+https://github.com/darrenCWJ/travel-super-app)"
     );
   });
 

@@ -74,7 +74,7 @@ export const SOURCE_NAME = 'Wikidata (CC0)';
  * scripts/user-agent.test.ts has the finding and pins this form across the
  * tree.
  */
-const USER_AGENT = 'china-itinerary-planner/ingest-country-facts (+https://github.com/darrenCWJ/china-itinerary-planner)';
+const USER_AGENT = 'travel-super-app/ingest-country-facts (+https://github.com/darrenCWJ/travel-super-app)';
 
 /**
  * The country universe this ingest asks about: every code the app ships a city

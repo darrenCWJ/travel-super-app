@@ -142,7 +142,7 @@ export function loadCatalog(): Catalog | null {
 }
 
 const DEFAULT_CATALOG_URL =
-  "https://raw.githubusercontent.com/darrenCWJ/china-itinerary-planner/main/apps/web/data/catalog.json";
+  "https://raw.githubusercontent.com/darrenCWJ/travel-super-app/main/apps/web/data/catalog.json";
 
 let remoteLoad: Promise<void> | null = null;
 

@@ -37,7 +37,7 @@ describe("the User-Agent", () => {
     vi.unstubAllGlobals();
   });
 
-  const EXPECTED = "china-itinerary-planner/enrich-cities (+https://github.com/darrenCWJ/china-itinerary-planner)";
+  const EXPECTED = "travel-super-app/enrich-cities (+https://github.com/darrenCWJ/travel-super-app)";
 
   /** A stand-in `fetch` that answers every request with `body`, and remembers what it was sent. */
   const answering = (body: unknown) => {
