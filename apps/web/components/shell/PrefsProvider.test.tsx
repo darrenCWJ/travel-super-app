@@ -175,7 +175,7 @@ describe("PrefsProvider", () => {
     );
   });
 
-  test("saving preferences updates state, the cookie and the server", async () => {
+  test("saving preferences updates state and the cookie, and asks the server for nothing", async () => {
     const next: UserPrefs = {
       theme: "dark",
       accent: 120,
@@ -200,10 +200,9 @@ describe("PrefsProvider", () => {
 
     expect(JSON.parse(screen.getByRole("status").textContent!)).toEqual(next);
     expect(document.cookie).toContain("cip-prefs=theme=dark&accent=120&view=globe&hues=JP:40");
-    expect(fetch).toHaveBeenCalledWith(
-      "/api/me/prefs",
-      expect.objectContaining({ method: "PUT" })
-    );
+    // The cookie is the only store: the account-linked copy went with sign-in
+    // while the app is rebuilt (phase 1, slice A), and with it the request.
+    expect(fetch).not.toHaveBeenCalled();
   });
 
   test("saving dark flips the document without a reload", () => {
@@ -248,30 +247,6 @@ describe("PrefsProvider", () => {
     );
 
     expect(seen).toBe("dark");
-  });
-
-  test("a failing save is swallowed rather than crashing the shell", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("offline")));
-    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
-    let save: (p: UserPrefs) => void = () => {};
-
-    function Saver() {
-      save = usePrefs().setPrefs;
-      return null;
-    }
-
-    render(
-      <PrefsProvider>
-        <Saver />
-      </PrefsProvider>
-    );
-
-    await act(async () =>
-      save({ theme: "system", accent: "country", accentHues: {}, worldView: "globe" })
-    );
-
-    expect(document.cookie).toContain("theme=system");
-    consoleError.mockRestore();
   });
 
   test("usePrefs outside a provider still returns usable defaults", () => {

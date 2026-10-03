@@ -71,19 +71,12 @@ export function PrefsProvider({
   // first render already agrees with the DOM the script produced.
   const [prefs, setPrefsState] = useState<UserPrefs>(() => parsePrefsCookie(readCookie()));
 
+  // The cookie is the only store. The account-linked copy, synced to
+  // /api/me/prefs, went with sign-in while the app is rebuilt (phase 1, slice A).
   const setPrefs = useCallback((next: UserPrefs) => {
     const clean = sanitizePrefs(next);
     setPrefsState(clean);
     document.cookie = `${PREFS_COOKIE}=${serializePrefsCookie(clean)}; Path=/; Max-Age=${YEAR_SECONDS}; SameSite=Lax`;
-    // Fire and forget: the cookie is already authoritative for rendering, so a
-    // failed sync costs cross-device persistence and nothing the user can see.
-    void fetch("/api/me/prefs", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(clean),
-    }).catch((error) => {
-      console.error("PrefsProvider: could not save preferences", error);
-    });
   }, []);
 
   // `false` until the passive effect below corrects it. This value only ever
