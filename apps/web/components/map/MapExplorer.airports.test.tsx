@@ -202,9 +202,10 @@ describe("the airport layer's toggle", () => {
     // the state went rather than about a dead button.
     expect(marks(container)).toHaveLength(2);
 
-    // `setPrefs` does two observable things, and neither happened: it writes
-    // the cookie `PrefsProvider` reads on mount, and it PUTs the whole object
-    // to the route whose schema would strip an unlisted key back out.
+    // `setPrefs` writes the cookie `PrefsProvider` reads on mount, and that did
+    // not happen. It also PUT the whole object to /api/me/prefs until phase
+    // 1's slice A retired that route; the request stays refused here so a
+    // persistence route for this toggle cannot quietly come back.
     expect(document.cookie).not.toContain(PREFS_COOKIE);
     expect(fetchMock.mock.calls.map((call) => String(call[0]))).not.toContain(
       "/api/me/prefs"

@@ -183,9 +183,10 @@ describe("contract scan harness", () => {
 describe("C4 — one module fetches trip data", () => {
   /**
    * Matches per-trip endpoints only. The trailing slash is load-bearing: it
-   * excludes `POST /api/trips`, the collection-level create call in
-   * components/PlanStep.tsx, which does not read a trip payload and is
-   * therefore outside this contract rather than an exception to it.
+   * excludes the collection path `/api/trips`, where a trip was created rather
+   * than read (from components/PlanStep.tsx, until phase 1's slice A retired
+   * trip creation), so a call there is outside this contract rather than an
+   * exception to it.
    */
   const TRIP_PATH = "/api/trips/";
 
@@ -306,15 +307,6 @@ describe("C4 — one module fetches trip data", () => {
     expect(stillNeedsExemption({ path: "y.tsx", text: real, code: stripComments(real) })).toBe(
       true
     );
-  });
-
-  it("does not treat trip creation as a payload read", () => {
-    // Pins the reasoning above, so a later widening of TRIP_PATH to
-    // "/api/trips" has to confront this deliberately rather than by accident.
-    const create = FILES.find((f) => f.path === "components/PlanStep.tsx");
-    expect(create).toBeDefined();
-    expect(create!.text).toContain('fetch("/api/trips"');
-    expect(create!.text.includes(TRIP_PATH)).toBe(false);
   });
 });
 

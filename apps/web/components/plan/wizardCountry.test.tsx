@@ -52,11 +52,6 @@ import { PrefsProvider } from "@/components/shell/PrefsProvider";
  */
 vi.setConfig({ testTimeout: 15_000, hookTimeout: 15_000 });
 
-/** `PlanStep` mounts `ShareTripCard`, which calls `useRouter`. */
-vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push: vi.fn() }),
-}));
-
 /**
  * `WorldPane` pulls both world-level renderers in through `next/dynamic`.
  * Resolved up front and handed back synchronously, for the reason

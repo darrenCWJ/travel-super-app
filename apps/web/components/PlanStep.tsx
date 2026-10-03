@@ -1,7 +1,5 @@
 "use client";
 
-import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { GapNote } from "@/components/plan/GapNote";
 import { getCountry } from "@/lib/countries";
@@ -16,16 +14,9 @@ interface PlanStepProps {
   input: TripInput;
   /** Catalog-derived destinations resolved via /api/destinations/resolve. */
   extraDestinations: Destination[];
-  /**
-   * The month the traveller picked, when they picked one (spec §5.2). Sent to
-   * the server so it can derive the season through the country profile rather
-   * than trusting `input.season`, which this client computes with a
-   * northern-hemisphere table.
-   */
-  month?: number | null;
 }
 
-export function PlanStep({ input, extraDestinations, month }: PlanStepProps) {
+export function PlanStep({ input, extraDestinations }: PlanStepProps) {
   const allDestinations = useMemo(
     () => [...DESTINATIONS, ...extraDestinations],
     [extraDestinations]
@@ -145,17 +136,19 @@ export function PlanStep({ input, extraDestinations, month }: PlanStepProps) {
       </div>
 
       {/*
-        `profile.name` again, not `country.name`, and for the same reason the
-        headline uses it: the card names the trip that gets WRITTEN to the
-        database, so a fallback to the bare ISO code would persist "PE trip".
-        See `defaultTripName`.
+        Where the shared-trip card was. Creating a trip needs the store and
+        sign-in, both retired while the app is rebuilt (phase 1, slice A), so
+        this step makes no request at all. Not `role="note"`: that is the gap
+        note's, below, and a screen reader should hear one disclaimer there.
+        Hidden in print like the card was, since it says nothing about the trip.
       */}
-      <ShareTripCard
-        input={input}
-        destinationNames={destinations.map((d) => d.name)}
-        countryName={profile.name}
-        month={month}
-      />
+      <div className="mt-6 rounded-xl border-2 border-dashed border-[var(--accent-ink)]/40 bg-[var(--paper)] p-5 print:hidden">
+        <h3 className="font-display text-lg font-semibold">Shared trips are being rebuilt</h3>
+        <p className="mt-1 text-sm text-[var(--ink-2)]">
+          You can&apos;t save or share this plan yet. It stays on this page until the rebuilt app
+          can keep it.
+        </p>
+      </div>
 
       <div className="mt-8 grid gap-8 lg:grid-cols-3 print:block">
         <div className="space-y-5 lg:col-span-2">
@@ -255,172 +248,6 @@ export function PlanStep({ input, extraDestinations, month }: PlanStepProps) {
         </aside>
       </div>
     </section>
-  );
-}
-
-/**
- * What a trip nobody has named is called.
- *
- * There used to be two answers to this and both of them said China: the
- * pre-filled field read `${destinationNames[0] ?? "China"} trip`, and a field
- * the traveller *cleared* fell back to the literal `"China trip"`. The second
- * one is the one that mattered — it is what `/api/trips` persists, so a
- * traveller planning Peru who blanked the box got a row in the database called
- * "China trip", shown on their dashboard, on the trip page, and to everyone
- * they sent the share link to. Unlike a wrong sentence on a page, that one
- * outlives the fix.
- *
- * One function for both, so they cannot disagree again, and one ladder:
- *
- *   1. **The first city.** The most specific true thing we know — "Lima trip".
- *      It is what the field has always pre-filled and it stays the first
- *      choice; a traveller reads their own itinerary, not their own passport.
- *   2. **The country.** `CountryProfile.name`, so "Peru trip" — matching the
- *      headline's "Your Peru itinerary" exactly, and resolved the same way.
- *      This is the branch that fires when the catalog resolved no destination
- *      (a `/api/destinations/resolve` miss lands the wizard on step 2 with an
- *      empty list), which is precisely where "China trip" used to appear.
- *   3. **Neither.** `"Untitled trip"` — country-free and never wrong. A blank
- *      `profile.name` means the code is not a country at all, and the profile
- *      is explicit that a caller must drop the name rather than print
- *      something in its place. "undefined trip", " trip" and "" are all worse:
- *      the last one fails `tripName: z.string().trim().min(1)` server-side and
- *      turns a cosmetic gap into a failed trip creation.
- *
- * A country-free default for every case ("Untitled trip" always) was the other
- * defensible option. It is rejected because it is *less* informative than what
- * the wizard already knows and already says one heading above — the defect was
- * never that the default named a place, it was that it named the wrong one.
- *
- * Trimmed before use so a field holding only spaces takes the fallback too:
- * `"   ".trim() || fallback` is the whole reason the caller uses `||` and not
- * `??`, and the same has to hold for the values feeding this.
- */
-function defaultTripName(firstDestination: string | undefined, countryName: string): string {
-  const subject = firstDestination?.trim() || countryName.trim();
-  return subject ? `${subject} trip` : "Untitled trip";
-}
-
-function ShareTripCard({
-  input,
-  destinationNames,
-  countryName,
-  month,
-}: {
-  input: TripInput;
-  destinationNames: string[];
-  /** `CountryProfile.name` — "Peru", "China", or `""`. See `defaultTripName`. */
-  countryName: string;
-  month?: number | null;
-}) {
-  const router = useRouter();
-  /**
-   * Computed once and used twice — as the field's initial value and as what a
-   * cleared field falls back to on submit. Those two being separate literals
-   * is exactly how the China default survived: nobody clearing the box was
-   * looking at the same string the writer used.
-   */
-  const fallbackName = defaultTripName(destinationNames[0], countryName);
-  const [tripName, setTripName] = useState(fallbackName);
-  const [startDate, setStartDate] = useState("");
-  const [creating, setCreating] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [unauthenticated, setUnauthenticated] = useState(false);
-
-  const create = async () => {
-    setCreating(true);
-    setError(null);
-    setUnauthenticated(false);
-    try {
-      const res = await fetch("/api/trips", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          // The written value. `||` and not `??`: a field cleared to "" or to
-          // whitespace has to take the fallback, and neither is nullish.
-          tripName: tripName.trim() || fallbackName,
-          startDate: startDate || null,
-          input,
-          // Omitted rather than sent as null when unset: the schema makes it
-          // optional, and null would fail validation.
-          ...(month ? { month } : {}),
-        }),
-      });
-      if (res.status === 401) {
-        setUnauthenticated(true);
-        setCreating(false);
-        return;
-      }
-      if (!res.ok) {
-        const body = (await res.json().catch(() => null)) as { error?: string } | null;
-        setError(
-          typeof body?.error === "string"
-            ? body.error
-            : "Couldn't create the shared trip — is the server running?"
-        );
-        setCreating(false);
-        return;
-      }
-      const json: { id: string; joinCode: string } = await res.json();
-      router.push(`/trip/${json.id}?code=${json.joinCode}`);
-    } catch {
-      setError("Couldn't create the shared trip — is the server running?");
-      setCreating(false);
-    }
-  };
-
-  return (
-    <div className="mt-6 rounded-xl border-2 border-dashed border-[var(--accent-ink)]/40 bg-[var(--paper)] p-5 print:hidden">
-      <h3 className="font-display text-lg font-semibold">Travelling together? 一起走</h3>
-      <p className="mt-1 text-sm text-[var(--ink-2)]">
-        Turn this plan into a shared trip: everyone joins with a code, sees the same live
-        itinerary, and ticks off packing and activities together.
-      </p>
-      <div className="mt-4 grid gap-3 sm:grid-cols-2">
-        <label className="text-xs font-medium text-[var(--ink-2)]">
-          Trip name
-          <input
-            type="text"
-            value={tripName}
-            onChange={(e) => setTripName(e.target.value)}
-            maxLength={60}
-            className="mt-1 w-full rounded-lg border border-[var(--line-1)] bg-[var(--surf-1)] px-3 py-2 text-sm text-[var(--ink-0)] focus-visible:outline-2 focus-visible:outline-[var(--accent-ink)]"
-          />
-        </label>
-        <label className="text-xs font-medium text-[var(--ink-2)]">
-          Start date (optional)
-          <input
-            type="date"
-            value={startDate}
-            onChange={(e) => setStartDate(e.target.value)}
-            className="mt-1 w-full rounded-lg border border-[var(--line-1)] bg-[var(--surf-1)] px-3 py-2 text-sm text-[var(--ink-0)] focus-visible:outline-2 focus-visible:outline-[var(--accent-ink)]"
-          />
-        </label>
-      </div>
-      <div className="mt-4 flex items-center gap-3">
-        <button
-          type="button"
-          onClick={() => void create()}
-          disabled={creating}
-          className="rounded-lg bg-[var(--seal)] px-5 py-2 text-sm font-semibold text-[var(--paper)] transition-colors hover:bg-[var(--seal)]/85 disabled:opacity-50"
-        >
-          {creating ? "Creating…" : "Start shared trip →"}
-        </button>
-        {unauthenticated ? (
-          <span className="text-xs text-[var(--seal)]">
-            Sign in to share this trip —{" "}
-            <Link
-              href={`/login?next=${encodeURIComponent(window.location.pathname)}`}
-              className="underline"
-            >
-              sign in
-            </Link>
-          </span>
-        ) : (
-          error && <span className="text-xs text-[var(--seal)]">{error}</span>
-        )}
-      </div>
-    </div>
   );
 }
 
