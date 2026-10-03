@@ -1,5 +1,5 @@
 {
- "generatedAt": "2026-10-02T15:04:09.788Z",
+ "generatedAt": "2026-10-03T13:56:53.368Z",
  "source": "GeoNames cities500 (CC BY 4.0)",
  "countries": [
   {
@@ -284,8 +284,8 @@
   },
   {
    "code": "DK",
-   "count": 510,
-   "generatedAt": "2026-10-01T15:42:37.976Z"
+   "count": 511,
+   "generatedAt": "2026-10-03T13:56:53.368Z"
   },
   {
    "code": "DM",
@@ -420,7 +420,7 @@
   {
    "code": "GN",
    "count": 83,
-   "generatedAt": "2026-08-29T15:36:54.681Z"
+   "generatedAt": "2026-10-03T13:56:53.368Z"
   },
   {
    "code": "GP",
@@ -445,7 +445,7 @@
   {
    "code": "GT",
    "count": 340,
-   "generatedAt": "2026-08-29T15:36:54.681Z"
+   "generatedAt": "2026-10-03T13:56:53.368Z"
   },
   {
    "code": "GU",
