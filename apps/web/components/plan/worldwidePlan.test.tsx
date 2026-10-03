@@ -1,5 +1,5 @@
-import { cleanup, fireEvent, render, within } from "@testing-library/react";
-import { afterEach, describe, expect, test, vi } from "vitest";
+import { cleanup, render } from "@testing-library/react";
+import { afterEach, describe, expect, test } from "vitest";
 import { PlanStep } from "@/components/PlanStep";
 import { BriefingView } from "@/components/trip/BriefingView";
 import { PackingSection } from "@/components/trip/PackingSection";
@@ -46,11 +46,6 @@ import type { Destination } from "@/lib/types";
  * that test's wall-clock budget and flakes under parallel load (commit
  * 84cd61e). Each `test` below renders and scans, and nothing more.
  */
-
-/** `ShareTripCard` calls `useRouter`, which jsdom has no provider for. */
-vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push: vi.fn() }),
-}));
 
 /** Lima, Cusco, Arequipa — ids and coordinates from `public/cities/PE.json`. */
 const PERU_CITY_IDS = ["G3936456", "G3941584", "G3947322"];
@@ -112,9 +107,7 @@ const peru = assemble("PE", PERU_CITY_IDS);
 const china = assemble("CN", CHINA_CITY_IDS);
 
 function renderWizard(trip: Assembled): string {
-  const { container } = render(
-    <PlanStep input={trip.input} extraDestinations={trip.destinations} month={JUNE} />
-  );
+  const { container } = render(<PlanStep input={trip.input} extraDestinations={trip.destinations} />);
   return container.innerHTML;
 }
 
@@ -217,10 +210,9 @@ function hopLine(html: string): string {
  * chop changing from `启程` to `同行` is the one deliberate change to China's
  * rendered output this task makes — see the arming test below.
  *
- * `一起走` in the share-a-trip card is still not on T31's file:line list and
- * remains unowned. It is the one entry left below.
+ * `一起走` in the share-a-trip card was never on T31's file:line list. It went
+ * with the card itself in phase 1's slice A, which retired trip creation.
  */
-const UNOWNED_SHARE_CARD_CJK = ["一", "起", "走"];
 
 describe("T30 jsdom — the trip that gets rendered", () => {
   test("is a real Peru trip, or every scan below is vacuous", () => {
@@ -266,16 +258,12 @@ describe("T30 jsdom — the negative half", () => {
     expect(hopLine(renderBriefing(peru))).toContain(`${NEUTRAL_GLYPH} Travel to Cusco`);
   });
 
-  test("the wizard leaks only the unowned share-card CJK, and nothing else", () => {
-    // Post-fix: no token matches at all. `chinaLeaks` reports CHINA_TOKENS
-    // first and CJK codepoints after them, so an empty token half in front of
-    // these three is the whole claim — "China" and 启/程 went with T31, 🚄 with
-    // the country-aware glyph. `一起走` is `ShareTripCard`'s, on no task's
-    // file list; see the constant's docblock.
-    expect(chinaLeaks(renderWizard(peru))).toEqual(["一", "起", "走"]);
-    // Spelled out above, and cross-checked against the constant here, so the
-    // two cannot drift and the constant's docblock stays the explanation.
-    expect(chinaLeaks(renderWizard(peru))).toEqual(UNOWNED_SHARE_CARD_CJK);
+  test("the wizard leaks nothing", () => {
+    // "China" and 启/程 went with T31, 🚄 with the country-aware glyph, and
+    // `一起走` with the share-a-trip card, retired in phase 1's slice A. The
+    // exclusion has shrunk to nothing, as the negative half's docblock says it
+    // should, so the constant that named it is gone too.
+    expect(chinaLeaks(renderWizard(peru))).toEqual([]);
     // Armed the same way as the other two surfaces.
     expect(hopLine(renderWizard(peru))).toContain(`${NEUTRAL_GLYPH} Travel to Cusco`);
     // T31's arming proof, direction one: a country with no curated mark shows
@@ -302,6 +290,16 @@ describe("T30 jsdom — the negative half", () => {
     // names AND is in the facts artifact, so China reads the same either way —
     // which is the point: the fix moved the source without moving China's copy.
     expect(renderWizard(china)).toContain("Your China itinerary");
+  });
+
+  test("a code that is not a country drops the name from the headline", () => {
+    // A blank profile name means the code names no country at all, and the
+    // headline says less rather than something false. An id nothing carries,
+    // so no curated destination resolves and quietly supplies a country.
+    const nowhere: TripInput = { ...peru.input, destinationIds: ["G0000000"], country: "ZZ" };
+    const wizard = renderWizard({ ...peru, input: nowhere, destinations: [] });
+    expect(wizard).toContain("Your itinerary");
+    expect(wizard).not.toContain("undefined");
   });
 
   test("everything the generators produced is clean — the leaks are render-only", () => {
@@ -348,171 +346,6 @@ describe("T30 jsdom — the negative half", () => {
     expect(chinaLeaks(html)).toEqual([]);
     expect(html).not.toContain(NEUTRAL_GLYPH);
     expect(html).not.toContain(RAIL_GLYPH);
-  });
-});
-
-/**
- * FINDING 3 (T31b) — the leak that gets WRITTEN DOWN.
- *
- * `ShareTripCard` defaulted a cleared trip-name field to the literal
- * `"China trip"` and pre-filled the field with `${destinationNames[0] ??
- * "China"} trip`. Everything else this file scans is a render, and a render is
- * fixed the moment the code is: a Peru trip created with the blank field went
- * to `/api/trips`, into the trips table, onto the dashboard, onto the trip page
- * and into every share link — under China's name, permanently. It is the only
- * finding in the phase that survives its own fix.
- *
- * No scan above could see it. `renderWizard` reads `container.innerHTML`, and
- * a controlled `<input value>` is a DOM property React assigns, not markup —
- * so the string never appeared in any scanned surface, and the POST body it
- * ends up in is not rendered at all. The only instrument that catches it is
- * driving the button and reading what went on the wire, which is what
- * `shareCardNames` does.
- *
- * Both the pre-fill and the blank-field fallback are checked, because they were
- * two separate literals and only fixing the louder one leaves the other.
- */
-/**
- * A wizard that resolved no destination at all — the resolve-miss branch.
- *
- * Both halves matter. `extraDestinations: []` is not enough on its own: the
- * curated `lib/data` list is merged in ahead of it, so China's `"beijing"` id
- * still resolves and would quietly send this down the first-city branch
- * instead. An id nothing carries is what makes the fallback the thing measured
- * — and it makes the Peru and China cases the same shape, rather than Peru's
- * passing by the accident of GeoNames ids being absent from the curated list.
- */
-const UNRESOLVED_IDS = ["G0000000"];
-
-function unresolved(tripInput: TripInput): TripInput {
-  return { ...tripInput, destinationIds: UNRESOLVED_IDS };
-}
-
-interface ShareCardNames {
-  /** What the field says before anyone touches it. */
-  prefilled: string;
-  /** What `/api/trips` is asked to persist. The one that outlives the fix. */
-  posted: string;
-}
-
-/**
- * Render the wizard, put `typed` in the trip-name field, press the button, and
- * report both names.
- *
- * **The fetch stub never settles, deliberately.** `create()` awaits it and
- * stops there, so no state update lands outside React's `act()` — this needs
- * no `waitFor`, no fake timers and no polling, and so cannot contribute the
- * kind of timing-sensitive test commit 84cd61e had to repair. The request body
- * is captured synchronously when the click handler calls `fetch`, which is
- * everything the assertions below read.
- *
- * `extraDestinations: []` is not a contrived input: `goToPlan` in
- * `app/plan/page.tsx` advances to step 2 on any `res.ok`, so a resolve that
- * comes back with nothing lands a real traveller on exactly this page — and
- * that is the branch where the old code said "China".
- */
-function shareCardNames(
-  tripInput: TripInput,
-  extraDestinations: Destination[],
-  typed: string
-): ShareCardNames {
-  const fetchMock = vi.fn((_url: string, _init: RequestInit) => new Promise<Response>(() => {}));
-  vi.stubGlobal("fetch", fetchMock);
-  try {
-    // Scoped to THIS render's container, not to `document.body`, which is what
-    // `render`'s own bound queries search. `cleanup` runs between tests, not
-    // between two renders inside one — and a test that names a Peru trip and a
-    // China trip in the same breath is exactly what this file wants to write.
-    const { container } = render(
-      <PlanStep input={tripInput} extraDestinations={extraDestinations} month={JUNE} />
-    );
-    const card = within(container);
-    const field = card.getByLabelText(/Trip name/) as HTMLInputElement;
-    const prefilled = field.value;
-    fireEvent.change(field, { target: { value: typed } });
-    fireEvent.click(card.getByRole("button", { name: /Start shared trip/ }));
-
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    const [url, init] = fetchMock.mock.calls[0];
-    // Armed: this is the trip-creation write path and not some other request.
-    expect(url).toBe("/api/trips");
-    expect(init.method).toBe("POST");
-    const body = JSON.parse(String(init.body)) as { tripName: string };
-    return { prefilled, posted: body.tripName };
-  } finally {
-    vi.unstubAllGlobals();
-  }
-}
-
-describe("T30 jsdom — the name the trip is SAVED under", () => {
-  test("a blank-name Peru trip is never persisted as a China trip", () => {
-    // Whitespace, not "": `.trim() ||` is what makes a space-only field take
-    // the fallback, and a bare "" would not exercise it.
-    const names = shareCardNames(peru.input, peru.destinations, "   ");
-    expect(chinaLeaks(names.posted)).toEqual([]);
-    expect(chinaLeaks(names.prefilled)).toEqual([]);
-    // The most specific true thing the wizard knows.
-    expect(names.posted).toBe("Lima trip");
-    expect(names.prefilled).toBe("Lima trip");
-  });
-
-  test("with no destination resolved it names the country, not China", () => {
-    // The branch the old `destinationNames[0] ?? "China"` covered, and the one
-    // a `/api/destinations/resolve` miss actually reaches.
-    const names = shareCardNames(unresolved(peru.input), [], "");
-    expect(chinaLeaks(names.posted)).toEqual([]);
-    expect(names.posted).toBe("Peru trip");
-    expect(names.prefilled).toBe("Peru trip");
-  });
-
-  test("a code that is not a country gets a country-free name, not a broken one", () => {
-    const nowhere: TripInput = { ...unresolved(peru.input), country: "ZZ" };
-    // Armed: the profile really did resolve no name, which is the case under
-    // test — the headline drops the name for exactly the same reason.
-    expect(renderWizard({ ...peru, input: nowhere, destinations: [] })).toContain(
-      "Your itinerary"
-    );
-    const names = shareCardNames(nowhere, [], "");
-    expect(names.posted).toBe("Untitled trip");
-    expect(names.prefilled).toBe("Untitled trip");
-    // The three ways this could have degraded instead. The last is the worst:
-    // `tripName: z.string().trim().min(1)` rejects it, so a blank name would
-    // turn a cosmetic gap into a trip that cannot be created at all.
-    expect(names.posted).not.toContain("undefined");
-    expect(names.posted).not.toBe(" trip");
-    expect(names.posted.trim()).not.toBe("");
-  });
-
-  test("what the traveller actually typed is written down, trimmed and unchanged", () => {
-    // The fallback must be a fallback. A fix that always names the country
-    // would satisfy every assertion above and silently rename everyone's trip.
-    // `unresolved` so this renders an empty itinerary rather than a second
-    // ten-day one: which fallback it would have used is not what is measured,
-    // and the cheaper render keeps this file's share of the jsdom project's
-    // wall-clock down (commit 84cd61e).
-    expect(shareCardNames(unresolved(peru.input), [], "  Machu Picchu week  ").posted).toBe(
-      "Machu Picchu week"
-    );
-  });
-});
-
-/**
- * The arming half of the finding above, and the reason a fix cannot simply
- * blank every default: China is a country somebody really does travel to, and
- * "China trip" is the *right* name for a China trip. What was wrong was
- * printing it on a Peruvian one.
- */
-describe("T30 jsdom — the saved name, armed from China's side", () => {
-  test("a blank-name China trip is still named, by its city and by its country", () => {
-    expect(shareCardNames(china.input, china.destinations, "").posted).toBe("Beijing trip");
-    expect(shareCardNames(unresolved(china.input), [], "").posted).toBe("China trip");
-  });
-
-  test("and the identical scan over those names reports the leak", () => {
-    // The scanner is live on this surface. Without this, `chinaLeaks` returning
-    // [] for the Peru names above would be indistinguishable from a scan that
-    // matches nothing at all.
-    expect(chinaLeaks(shareCardNames(unresolved(china.input), [], "").posted)).toEqual(["China"]);
   });
 });
 

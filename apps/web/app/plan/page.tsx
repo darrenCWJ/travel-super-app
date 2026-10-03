@@ -1,12 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { DestinationStep } from "@/components/DestinationStep";
 import { DetailsStep } from "@/components/DetailsStep";
 import { GeoNamesCredit } from "@/components/plan/GeoNamesCredit";
 import { PlanStep } from "@/components/PlanStep";
 import type { AirportPick } from "@/components/trip/AirportPicker";
-import { mergeCatalogHit, shouldFetchEnrichment } from "@/lib/catalogExtras";
+import { mergeCatalogHit } from "@/lib/catalogExtras";
 import { DESTINATIONS } from "@/lib/data";
 import { resolveTripSeason } from "@/lib/tripSeason";
 import { WIZARD_STEPS, canAdvance, tripCountryFromPicks } from "@/lib/wizard";
@@ -23,8 +23,9 @@ export default function PlanPage() {
   const [visited, setVisited] = useState<string[]>([]);
   /**
    * The arrival gateway chosen on the destinations map (spec §10.3, D3).
-   * Sent to the create route as `arrivalAirport` only when set, so an
-   * untouched trip keeps the server's own stamped default (Task 5).
+   * It went to the create route as `arrivalAirport`, which stamped the trip's
+   * gateways; that route is retired while the app is rebuilt (phase 1, slice
+   * A), so the plan input still carries it and nothing reads it yet.
    */
   const [arrival, setArrival] = useState<AirportPick | null>(null);
   const [season, setSeason] = useState<Season>("autumn");
@@ -86,16 +87,6 @@ export default function PlanPage() {
   const [resolving, setResolving] = useState(false);
   const [resolveError, setResolveError] = useState<string | null>(null);
   const [hydrated, setHydrated] = useState(false);
-  /**
-   * Ids the lazy enrichment fetch has already been fired for, this session.
-   *
-   * Never cleared. A city Wikidata has nothing for resolves to a cached miss,
-   * which leaves `description` null forever — so without this the guard in
-   * `shouldFetchEnrichment` stays true and every re-pick re-asks. A ref rather
-   * than state because nothing renders from it and a write must be visible to
-   * the very next `addCatalog` call in the same tick.
-   */
-  const enrichRequested = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     try {
@@ -153,34 +144,18 @@ export default function PlanPage() {
    * catch the residue.
    */
   const addCatalog = (hit: CatalogHit) => {
-    // Read for the fetch decision only; the state writes below use the updater
-    // form so they cannot race a second pick in the same tick.
-    const merged = mergeCatalogHit(extras[hit.qid], hit);
+    // The updater form throughout, so a second pick in the same tick cannot
+    // race this one.
     setExtras((prev) => ({ ...prev, [hit.qid]: mergeCatalogHit(prev[hit.qid], hit) }));
     setSelected((prev) => (prev.includes(hit.qid) ? prev : [...prev, hit.qid]));
     // The country this city is in, captured at the only moment it is known —
     // see `pickedIn`. First write wins, so a re-pick under a switched scope
     // cannot move a city that is already on the trip.
     setPickedIn((prev) => (prev[hit.qid] ? prev : { ...prev, [hit.qid]: country }));
-    // A city outside the build-time top 30 arrives with no description; the
-    // first time anyone selects it, fetch one (spec §4). Fire-and-forget: the
-    // pick is already committed above and a missing blurb is an accepted
-    // state, so nothing here is allowed to block or to fail loudly.
-    //
-    // The three refusals live in `shouldFetchEnrichment` — see lib/catalogExtras.ts
-    // for why each one exists and why the guard is not inline here.
-    if (!shouldFetchEnrichment(merged, enrichRequested.current)) return;
-    enrichRequested.current.add(hit.qid);
-    void fetch(`/api/cities/enrich?ids=${encodeURIComponent(hit.qid)}`)
-      .then((res) => (res.ok ? res.json() : null))
-      .then((json: { enrichment?: Record<string, { description: string | null }> } | null) => {
-        const description = json?.enrichment?.[hit.qid]?.description ?? null;
-        if (description === null) return;
-        setExtras((prev) =>
-          prev[hit.qid] ? { ...prev, [hit.qid]: { ...prev[hit.qid], description } } : prev
-        );
-      })
-      .catch(() => {});
+    // A city outside the build-time top 30 arrives with no description, and
+    // keeps none for now: the route that fetched one needed a session and is
+    // retired in phase 1's slice A. Enrichment returns with `reference/` in
+    // phase 4, and lib/catalogExtras.ts keeps its guard for that.
   };
 
   const removeCatalog = (qid: string) => {
@@ -445,7 +420,7 @@ export default function PlanPage() {
           />
         )}
         {step === 2 && (
-          <PlanStep input={tripInput} extraDestinations={extraDestinations} month={month} />
+          <PlanStep input={tripInput} extraDestinations={extraDestinations} />
         )}
       </main>
 

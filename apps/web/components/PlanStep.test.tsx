@@ -1,4 +1,4 @@
-import { cleanup, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import type { TripInput } from "@/lib/itinerary";
 import type { Destination } from "@/lib/types";
@@ -11,12 +11,7 @@ import { PlanStep } from "./PlanStep";
  * is drawn, that it is drawn from the *country* rather than from the plan, and
  * that it is structurally a note rather than a sixth tip. The itinerary itself
  * has its own suites; nothing here asserts on the day list.
- *
- * `ShareTripCard` calls `useRouter`, which jsdom has no provider for.
  */
-vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push: vi.fn() }),
-}));
 
 /**
  * One destination per country, minimal but real: `buildItinerary` returns an
@@ -127,5 +122,46 @@ describe("PlanStep — the gap note", () => {
       "Our data also has no currency, plug types, mains voltage or dialling code for " +
         "this country."
     );
+  });
+});
+
+/**
+ * Trips, sign-in and sharing are retired while the app is rebuilt (phase 1,
+ * slice A), and the route that created a trip from this step with them. The
+ * plan stays on screen, printable, and says why it goes no further.
+ */
+describe("PlanStep — the last step while trips are rebuilt", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  test("says shared trips are being rebuilt, where the create flow used to be", () => {
+    render(<PlanStep input={input("PE", LIMA.id)} extraDestinations={[LIMA]} />);
+
+    expect(screen.getByRole("heading", { name: "Shared trips are being rebuilt" })).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "You can't save or share this plan yet. It stays on this page until the rebuilt app can keep it."
+      )
+    ).toBeInTheDocument();
+    // The flow it replaces: a trip-name field and a button that created the trip.
+    expect(screen.queryByLabelText(/Trip name/)).toBeNull();
+    expect(screen.queryByRole("button", { name: /shared trip/i })).toBeNull();
+  });
+
+  test("asks the server for nothing, whichever button is pressed", () => {
+    // Never settles, so nothing a press might start can update state outside act().
+    const fetchSpy = vi.fn((_url: string, _init?: RequestInit) => new Promise<Response>(() => {}));
+    vi.stubGlobal("fetch", fetchSpy);
+    // jsdom does not implement print, and the print button is still here.
+    vi.stubGlobal("print", vi.fn());
+
+    render(<PlanStep input={input("PE", LIMA.id)} extraDestinations={[LIMA]} />);
+    const buttons = screen.getAllByRole("button");
+    // Armed: the step really has buttons to press, the print button among them.
+    expect(buttons.map((button) => button.textContent)).toContain("🖨️ Print / save as PDF");
+    for (const button of buttons) fireEvent.click(button);
+
+    expect(fetchSpy).not.toHaveBeenCalled();
   });
 });

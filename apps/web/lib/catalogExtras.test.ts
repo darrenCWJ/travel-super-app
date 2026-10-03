@@ -120,9 +120,9 @@ describe("mergeCatalogHit", () => {
 /**
  * `app/plan/page.tsx` is the sole call site and no test may render it —
  * `vitest.config.mts` includes only lib/, scripts/ and components/. Without
- * this, the page could be reverted to the wholesale overwrite, or lose the
- * lazy-enrichment fetch entirely, with the whole suite green. Blunt on
- * purpose, in the manner of lib/contracts.test.ts.
+ * this, the page could be reverted to the wholesale overwrite, or call the
+ * retired enrich route again, with the whole suite green. Blunt on purpose, in
+ * the manner of lib/contracts.test.ts.
  */
 describe("app/plan/page.tsx wiring", () => {
   const source = readFileSync(join(import.meta.dirname, "..", "app", "plan", "page.tsx"), "utf8");
@@ -134,18 +134,13 @@ describe("app/plan/page.tsx wiring", () => {
     expect(source).not.toContain("[hit.qid]: hit");
   });
 
-  test("asks the enrich route for a description the pick arrived without", () => {
-    expect(source).toContain("/api/cities/enrich?ids=");
-  });
-
-  test("gates that fetch on shouldFetchEnrichment and records the id it asked about", () => {
-    // The guard and the ref are tested above as logic; this is the wiring
-    // that makes them run. Without it the page could keep the bare
-    // `merged.description !== null` check — which is false on every first
-    // search pick, Q-ids included — with the whole suite green.
-    expect(source).toContain("shouldFetchEnrichment(merged, enrichRequested.current)");
-    expect(source).toContain("enrichRequested.current.add(hit.qid)");
-    expect(source).not.toContain("if (merged.description !== null) return;");
+  test("no longer asks the retired enrich route for a description", () => {
+    // /api/cities/enrich needed a session and is retired in phase 1's slice A,
+    // so the explorer stands alone on the five reference routes. Enrichment
+    // returns with `reference/` in phase 4; `shouldFetchEnrichment` below and
+    // lib/server/cityEnrichment.ts wait for it, unwired.
+    expect(source).not.toContain("/api/cities/enrich");
+    expect(source).not.toContain("shouldFetchEnrichment");
   });
 });
 
